@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a first-class minimum-diff gate (`knowledge/yalla/MINIMUM-DIFF.md`) and wire it into `/yalla` classification, plan templates, and PR summaries.
+- Add `/yalla-simplify` and `/yalla-simplify-audit` for deletion-only diff and repo bloat reviews.
+- Add cross-agent adapters for OpenCode, Codex, Gemini CLI, Cursor, Windsurf, Cline, Copilot, and Kiro, all aligned to `AGENTS.md` via `npm run rules:check`.
+- Add `npm run eval:yalla:minimum-diff` and `npm run yalla:benchmark` fixture scaffolding.
 - Add `npm run yalla:run` operator controls: `doctor`, `event`, `checkpoint`, `status`, `report`, `resume`, `rewind`, and `export`.
 - Add structured run timeline artifacts (`.pipeline/events.jsonl`) and local checkpoints (`.pipeline/checkpoints/*`, `.pipeline/latest-checkpoint.json`).
 - Add local HTML run reports with pipeline graph, status JSON, recent events, artifact counts, and timing telemetry.

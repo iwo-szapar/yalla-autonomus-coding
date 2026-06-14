@@ -1,12 +1,13 @@
 {
   "name": "yalla",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "type": "module",
   "description": "Yalla autonomous-coding eval harness, onboarding dashboard, and autopilot for Claude Code (standalone, open-source).",
   "scripts": {
     "eval:yalla:proof-contract": "tsx eval/yalla/runner/proof-contract-runner.ts",
     "eval:yalla:test-inventory": "tsx eval/yalla/runner/test-inventory-runner.ts",
+    "eval:yalla:minimum-diff": "tsx eval/yalla/runner/minimum-diff-runner.ts",
     "eval:yalla:plan-quality": "tsx eval/yalla/runner/plan-review-coverage-runner.ts plan-quality",
     "eval:yalla:review-quality": "tsx eval/yalla/runner/plan-review-coverage-runner.ts review-quality",
     "eval:yalla:test-coverage": "tsx eval/yalla/runner/plan-review-coverage-runner.ts test-coverage",
@@ -14,10 +15,12 @@
     "eval:yalla:outcome-quality": "tsx eval/yalla/runner/outcome-quality.ts",
     "eval:yalla:smoke": "tsx eval/yalla/runner/smoke-runner.ts",
     "yalla:autopilot": "tsx scripts/yalla-autopilot.ts",
+    "yalla:benchmark": "tsx scripts/yalla-benchmark.ts",
     "yalla:onboard": "tsx scripts/yalla-onboard.ts",
     "yalla:run": "tsx scripts/yalla-run.ts",
+    "rules:check": "node scripts/check-rule-copies.cjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "npm run rules:check && vitest run",
     "test:e2e": "echo \"No e2e suite in the standalone example dataset; UI-journey tests are placeholder fixtures.\" && exit 0"
   },
   "devDependencies": {

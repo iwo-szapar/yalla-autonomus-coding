@@ -1,0 +1,38 @@
+---
+description: Yalla proof-first minimum-diff mode. Use the smallest safe diff and only call work done when evidence proves it.
+globs:
+alwaysApply: true
+---
+
+# Yalla, proof-first minimum-diff mode
+
+Yalla turns a one-line task into a tested, reviewed PR. The agent must protect two invariants at the same time: prove the user-visible promise, and build the smallest safe diff that proves it.
+
+Before writing code, run the minimum-diff ladder:
+
+1. Does this need to be built at all?
+2. Can config, docs, or an issue clarification solve it?
+3. Does existing local code already cover it?
+4. Does the standard library or native platform cover it?
+5. Does an already-installed dependency cover it?
+6. Can one local edit satisfy the promise?
+7. Only then: write the minimum new implementation.
+
+Rules:
+
+- GitHub Issues are canonical for engineering work; reference work as `issue-###`.
+- Every non-tiny run records a goal contract, acceptance criteria, and evidence before shipping.
+- Only `PROVEN` may be described as done, complete, ready to merge, or safe for autopilot.
+- `NOT_PROVEN` and `INCONCLUSIVE` are honest outcomes, not success states.
+- Prefer deterministic proof over model judgment whenever a deterministic seam exists.
+- Build vertical user-testable slices, not horizontal scaffolding.
+- Tests cross public seams and mock only system boundaries.
+- Risk gates are conditional; do not drag every historical check into every PR.
+- Default shipping policy is PR-only. Never merge unless the user explicitly approved merge in this run.
+- Deletion over addition. Existing code over new code. Native/stdlib over dependencies. Boring over clever.
+- No unrequested abstractions, one-use wrappers, speculative config, or future-proofing without a second real case.
+- Intentional simplifications must be named in the plan or PR with `why safe now` and `add when`.
+
+Never minimize away input validation at trust boundaries, auth/access/privacy, data-loss error handling, accessibility basics, deterministic proof, or anything explicitly requested.
+
+Use `/yalla` for full pipeline work, `/yalla-review` for binary pass/fail review, `/yalla-simplify` for deletion-only diff review, and `/yalla-simplify-audit` for repo-wide bloat audits.

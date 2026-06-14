@@ -15,6 +15,22 @@ Write the classification into `.pipeline/classification.json` and `.pipeline-sta
   "phase_split_required": false,
   "risk_tier": "low|medium|high",
   "evidence_mode": "minimal|standard|strict",
+  "ceremony_mode": "lean|standard|strict",
+  "minimum_diff_decision": {
+    "selected_rung": "no-build|config-docs|existing-code|stdlib-native|installed-dependency|one-local-change|new-implementation",
+    "why_higher_rungs_failed": ["..."],
+    "reuse_targets": ["..."],
+    "new_dependency_allowed": false,
+    "files_budget": 3,
+    "loc_budget": 120,
+    "skipped_complexity": [
+      {
+        "item": "...",
+        "why_safe_to_skip": "...",
+        "add_when": "..."
+      }
+    ]
+  },
   "product_intent_gate": "applies|n/a",
   "product_intent_gate_reason": "...",
   "architecture_doc_gate": "applies|n/a",
@@ -83,6 +99,18 @@ Set `false` only when one PR can remain independently shippable, reviewable, and
 - `minimal`: tiny-hotfix or docs-only work. PR body includes reproduce/fix/verify evidence; committed `.pipeline/*` artifacts are usually unnecessary.
 - `standard`: default. Local `.pipeline/*` artifacts guide the run; commit only artifacts that are useful for review.
 - `strict`: high-risk work. Use intent brief, hostile self-critique, acceptance trace, test evidence, and architecture alignment proof where applicable.
+
+## Ceremony Mode
+
+- `lean`: user invoked `/yalla lean ...`, the task is tiny/minimal, or the minimum-diff gate selected `no-build`, `config-docs`, `existing-code`, `stdlib-native`, `installed-dependency`, or `one-local-change` with low risk. Lean changes artifact volume, not proof honesty.
+- `standard`: default adaptive pipeline for normal feature/fix work.
+- `strict`: user invoked `/yalla strict ...`, risk is high, or proof requires strict evidence artifacts and stricter review separation.
+
+## Minimum Diff Decision
+
+Run `knowledge/yalla/MINIMUM-DIFF.md` before planning. Classification must record the selected rung, higher rungs checked, reuse targets, whether a new dependency is allowed, file/LOC budget, and skipped complexity with `why_safe_to_skip` plus `add_when`.
+
+If a task can be satisfied by `no-build`, `config-docs`, or `existing-code`, prefer that route and do not create implementation scope just to exercise the pipeline. If the task requires `new-implementation`, the plan must name why existing code, stdlib/native, and installed dependencies do not satisfy the promise.
 
 ## Architecture Doc Gate
 

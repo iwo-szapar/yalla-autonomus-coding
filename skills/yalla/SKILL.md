@@ -63,6 +63,7 @@ Read these on demand. They are the source of truth for the upgraded pipeline:
 
 - `.claude/YALLA.md` — repo config, gotchas, domain mapping, base branch defaults, commands
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/TASK-CLASSIFICATION.md` — adaptive task routing and merge policy
+- `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/MINIMUM-DIFF.md` — pre-plan ladder for the smallest safe diff
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/DIAGNOSIS.md` — bug/perf feedback loop before fixing
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/VERTICAL-SLICES.md` — tracer-bullet planning/building
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/TEST-SEAMS.md` — behavior tests through public interfaces
@@ -148,7 +149,7 @@ Do not fall back to file-only task IDs unless `.claude/YALLA.md` sets `tracking_
 
 ## Phase 0a: Classify
 
-Read `.claude/YALLA.md` and `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/TASK-CLASSIFICATION.md`.
+Read `.claude/YALLA.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/TASK-CLASSIFICATION.md`, and `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/MINIMUM-DIFF.md`.
 
 Classify the task before planning:
 
@@ -160,18 +161,24 @@ Classify the task before planning:
    - `false` only when one PR can stay independently shippable, reviewable, and rollbackable.
 5. Determine `risk_tier` (`low`, `medium`, `high`).
 6. Determine `evidence_mode` (`minimal`, `standard`, `strict`).
-7. Determine `merge_policy`:
+7. Determine `ceremony_mode` (`lean`, `standard`, `strict`):
+   - `lean` when the user invokes `/yalla lean ...`, or when tiny/minimal evidence mode is enough.
+   - `standard` by default.
+   - `strict` when the user invokes `/yalla strict ...`, or when high-risk evidence mode applies.
+   - Ceremony changes artifact volume and review depth, not honesty; only `PROVEN` is success in every mode.
+8. Determine `minimum_diff_decision` by running the ladder in `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/MINIMUM-DIFF.md` before planning. Record selected rung, higher rungs checked, reuse targets, skipped complexity, and file/LOC budget.
+9. Determine `merge_policy`:
    - Default: `pr-only`
    - Only set `auto-merge-approved` if the user explicitly asked to merge/automerge.
-8. Determine `architecture_doc_gate`:
+10. Determine `architecture_doc_gate`:
    - `applies` if the task changes a route, auth flow, API endpoint, data model, or any behavior already described in your architecture docs (`docs/architecture/`).
    - `n/a` only with a short reason.
-9. Determine `product_intent_gate`:
+11. Determine `product_intent_gate`:
    - `applies` if the task changes product behavior, user/admin/operator journeys, GTM/pricing/positioning surfaces, money, access, entitlements, delivery, onboarding, public product pages, generated artifacts, or agent workflows that decide what gets built.
    - `n/a` for tiny hotfixes, isolated tests, dependency/config updates, mechanical refactors, or docs edits that do not define future product behavior. Include a specific reason.
-10. Write `.pipeline/classification.json` and add the same fields to `.pipeline-state.json`.
-11. Write or update `.pipeline/goal-contract.json` with success criteria, constraints, budget, forbidden shortcuts, and required evidence.
-12. Record the phase in `.pipeline/events.jsonl` and checkpoint with phase `classify`.
+12. Write `.pipeline/classification.json` and add the same fields to `.pipeline-state.json`.
+13. Write or update `.pipeline/goal-contract.json` with success criteria, constraints, budget, forbidden shortcuts, and required evidence.
+14. Record the phase in `.pipeline/events.jsonl` and checkpoint with phase `classify`.
 
 ### Conditional routing
 
@@ -254,7 +261,7 @@ git worktree add -b "session/issue-$ISSUE_NUMBER-$SLUG" ".claude/worktrees/issue
 
 If already in a Claude Code worktree flow, use the equivalent worktree-entry mechanism.
 
-State must include `issue_number`, `issue_url`, `branch`, `task_type`, `scope_mode`, `required_gates`, `phase_split_required`, `risk_tier`, `evidence_mode`, `architecture_doc_gate`, `architecture_doc_gate_reason`, `product_intent_gate`, `product_intent_gate_reason`, `merge_policy`, and `phase: "1-plan"`. It must not introduce a parallel ID scheme outside `issue-###`.
+State must include `issue_number`, `issue_url`, `branch`, `task_type`, `scope_mode`, `required_gates`, `phase_split_required`, `risk_tier`, `evidence_mode`, `ceremony_mode`, `minimum_diff_decision`, `architecture_doc_gate`, `architecture_doc_gate_reason`, `product_intent_gate`, `product_intent_gate_reason`, `merge_policy`, and `phase: "1-plan"`. It must not introduce a parallel ID scheme outside `issue-###`.
 
 ---
 
@@ -298,6 +305,8 @@ For complex work, invoke `/yalla-plan`. For simple work, plan directly using the
 If `product_intent_gate: "applies"`, load `/product-intent` or read `${CLAUDE_PLUGIN_ROOT}/knowledge/product/PRODUCT-INTENT-FRAMEWORK.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/product/ASSUMPTION-TESTING.md`, and `${CLAUDE_PLUGIN_ROOT}/knowledge/product/METRICS-FRAMEWORK.md` before writing the technical plan. The Product Intent section must name the target actor, desired outcome, metric moved, load-bearing assumptions, cheapest validation, kill criteria, MVP scope, and intended behavior. If GTM-facing, also read `${CLAUDE_PLUGIN_ROOT}/knowledge/product/GTM-DISCOVERY.md`.
 
 If Product Intent is `N/A`, record the specific reason in the plan. Do not force product discovery onto tiny fixes.
+
+Before any technical approach, apply `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/MINIMUM-DIFF.md` and preserve the Phase 0a `minimum_diff_decision`. If implementation reality expands the file/LOC budget, update the plan with why the smaller rung failed before editing beyond the budget.
 
 Before the implementation plan, write `plans/active/issue-###-[slug]-research.md` when the task is non-trivial: multiple domains, prior implementation reuse, external API/library uncertainty, UI/product ambiguity, or more than one phase PR. Keep it high signal:
 
@@ -353,6 +362,18 @@ Plan structure:
 - Phase split required: [true|false and why]
 - Risk tier: [low|medium|high]
 - Evidence mode: [minimal|standard|strict]
+- Ceremony mode: [lean|standard|strict]
+
+## Minimum Diff Gate
+- Selected rung: [no-build|config-docs|existing-code|stdlib-native|installed-dependency|one-local-change|new-implementation]
+- Higher rungs checked: [what was checked and why it did not satisfy the promise]
+- Reuse targets: [existing files/APIs/native features/dependencies checked]
+- New dependency allowed: [true|false and why]
+- File/LOC budget: [N files / N LOC]
+- Skipped complexity:
+  - Item: [what is intentionally not being built]
+  - Why safe now: [why the success invariant still holds]
+  - Add when: [specific future signal]
 
 ## Domain Language
 - [Canonical project terms from your conventions doc (CLAUDE.md / AGENTS.md), .claude/YALLA.md, docs]
@@ -701,10 +722,11 @@ Before committing or opening/updating the PR:
 3. Call out risky behavior changes, rollout concerns, smoke/verification evidence, and accepted risks.
 4. Include a risk tier (`low`, `medium`, `high`) and why.
 5. Include documentation impact status and validation artifacts or links.
-6. If Product Intent applies, include the outcome, metric/proxy, MVP scope, intended-vs-implemented verdict, and any accepted product assumption risk.
-7. If updating an existing PR, fetch review and discussion comments, group blocking feedback first, and address or explicitly respond to each blocker.
-8. Do not rewrite history, force-push, or clean commits unless the user explicitly approves that separate action.
-9. Read `.pipeline/outcome-evaluation.json`. If verdict is not `PROVEN`, PR copy must say `human review needed` or `not proven`; do not use completion language.
+6. Include the Minimum Diff summary: selected rung, skipped complexity, why safe now, and add-when signals.
+7. If Product Intent applies, include the outcome, metric/proxy, MVP scope, intended-vs-implemented verdict, and any accepted product assumption risk.
+8. If updating an existing PR, fetch review and discussion comments, group blocking feedback first, and address or explicitly respond to each blocker.
+9. Do not rewrite history, force-push, or clean commits unless the user explicitly approves that separate action.
+10. Read `.pipeline/outcome-evaluation.json`. If verdict is not `PROVEN`, PR copy must say `human review needed` or `not proven`; do not use completion language.
 
 ---
 
@@ -747,6 +769,12 @@ Decision needed from the operator/maintainer:
 
 ## Risk Tier
 [low|medium|high] - [why]
+
+## Minimum Diff
+- Selected rung: [no-build|config-docs|existing-code|stdlib-native|installed-dependency|one-local-change|new-implementation]
+- Skipped complexity: [what we deliberately did not build]
+- Why safe now: [why the success invariant still holds]
+- Add when: [specific signal for expanding scope]
 
 ## Product Intent
 - Applies: [true|false and why]

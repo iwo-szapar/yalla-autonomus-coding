@@ -53,6 +53,12 @@ autopilot:
 evals:
   smoke_command: "npm run eval:yalla:smoke"
   project_fixtures_required_before_autopilot: true
+
+ceremony:
+  default_mode: lean
+  allow_user_override: true
+  minimum_diff_default_files_budget: 3
+  minimum_diff_default_loc_budget: 120
 `)
 
     expect(config.repo).toBe('example/repo')
@@ -69,6 +75,10 @@ evals:
     expect(config.autopilot.tokenBudget).toBe('100k')
     expect(config.autopilot.enabled).toBe(false)
     expect(config.evals.projectFixturesRequiredBeforeAutopilot).toBe(true)
+    expect(config.ceremony.defaultMode).toBe('lean')
+    expect(config.ceremony.allowUserOverride).toBe(true)
+    expect(config.ceremony.minimumDiffDefaultFilesBudget).toBe(3)
+    expect(config.ceremony.minimumDiffDefaultLocBudget).toBe(120)
   })
 
   it('loads explicit config paths relative to root dir', () => {

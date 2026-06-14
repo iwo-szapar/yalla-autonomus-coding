@@ -24,6 +24,7 @@ A run is valid only when it records:
 ```bash
 npm run eval:yalla:proof-contract
 npm run eval:yalla:test-inventory
+npm run eval:yalla:minimum-diff
 npm run eval:yalla:plan-quality
 npm run eval:yalla:review-quality
 npm run eval:yalla:test-coverage
@@ -32,6 +33,7 @@ npm run eval:yalla:outcome-quality
 npm run eval:yalla:smoke
 npm run yalla:autopilot -- run --issue issue-### --mode dry-run
 npm run yalla:autopilot -- queue --mode dry-run
+npm run yalla:benchmark
 ```
 
 The proof-contract command prints a JSON report showing:
@@ -48,6 +50,13 @@ The test-inventory command validates `eval/yalla/test-inventory.json` and its fi
 - Model judges are forbidden when deterministic seams exist.
 - Fixture sealed rubrics are removed before evaluation.
 - Likely secrets are rejected.
+
+The minimum-diff command validates the pre-plan scope-reduction gate. It rejects:
+
+- new dependencies where stdlib/native or existing code was not checked,
+- one-use abstractions without a second real case or explicit simplification note,
+- implementation plans that skip required higher rungs,
+- over-budget file or LOC growth without updating the minimum-diff decision.
 
 The plan/review/coverage commands validate the PRD 03 fixtures:
 
@@ -76,6 +85,8 @@ The fixture `source` fields cite the original SBF incidents, learnings, and PRDs
 - `zod_interface_drift_review_gap`: `docs/incidents/2026-04-16-yalla-review-gap.md`
 - `checkout_surface_parity_missing`: `docs/learnings/2026-05-06-checkout-surface-parity.md`
 - `deterministic_seam_model_judge_only`: proof-mode rule from PRD 01.
+- `date_format_new_dependency_rejected`: minimum-diff guard against dependency/abstraction bloat.
+- `one_implementation_interface_rejected`: minimum-diff guard against single-use interfaces.
 - `missing_evidence_false_success`: honest-outcome rule from PRD 01.
 - `heldout_inconclusive_never_success`: held-out regression guard for `INCONCLUSIVE` handling.
 - `plan_relevant_subsystem_scan`: PRD 03 guard against all-history scan requirements.

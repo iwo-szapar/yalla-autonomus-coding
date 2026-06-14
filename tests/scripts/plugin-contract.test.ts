@@ -72,6 +72,8 @@ function resolveRef(root: string, ref: string): boolean {
 describe('Claude Code plugin contract', () => {
   it('keeps plugin, marketplace, and package metadata aligned', () => {
     const plugin = readJson(join(repoRoot, '.claude-plugin/plugin.json'))
+    const codex = readJson(join(repoRoot, '.codex-plugin/plugin.json'))
+    const gemini = readJson(join(repoRoot, 'gemini-extension.json'))
     const marketplace = readJson(join(repoRoot, '.claude-plugin/marketplace.json'))
     const pkg = readJson(join(repoRoot, 'package.json'))
 
@@ -83,6 +85,13 @@ describe('Claude Code plugin contract', () => {
     expect(plugin.homepage).toBe('https://github.com/iwo-szapar/yalla')
     expect(plugin.repository).toBe('https://github.com/iwo-szapar/yalla')
     expect(plugin.keywords).toEqual(expect.arrayContaining(['autonomous', 'pipeline', 'agents']))
+    expect(plugin.keywords).toContain('minimum-diff')
+
+    expect(codex).toMatchObject({ name: plugin.name, version: pkg.version, skills: './skills/' })
+    expect(codex.repository).toBe(plugin.repository)
+    expect(codex.keywords).toEqual(expect.arrayContaining(['proof-contract', 'minimum-diff']))
+
+    expect(gemini).toMatchObject({ name: plugin.name, version: pkg.version, contextFileName: 'AGENTS.md' })
 
     expect(marketplace.name).toBe(plugin.name)
     expect(marketplace.owner.name).toBe(plugin.author.name)
@@ -164,6 +173,33 @@ describe('Claude Code plugin contract', () => {
 
     expect(unresolved).toEqual([])
     expect(listFiles(join(target, '.claude'), (path) => path.endsWith('.md.bak'))).toEqual([])
+  })
+
+  it('installs cross-agent adapters when host directories exist', () => {
+    const target = mkdtempSync(join(tmpdir(), 'yalla-adapters-install-'))
+    mkdirSync(join(target, '.opencode'), { recursive: true })
+    mkdirSync(join(target, '.cursor'), { recursive: true })
+    mkdirSync(join(target, '.windsurf'), { recursive: true })
+    mkdirSync(join(target, '.clinerules'), { recursive: true })
+    mkdirSync(join(target, '.kiro'), { recursive: true })
+
+    execFileSync(join(repoRoot, 'install.sh'), [target], { cwd: repoRoot, stdio: 'pipe' })
+
+    expect(existsSync(join(target, 'AGENTS.md'))).toBe(true)
+    expect(existsSync(join(target, '.opencode/plugins/yalla.mjs'))).toBe(true)
+    expect(existsSync(join(target, 'hooks/yalla-config.cjs'))).toBe(true)
+    expect(existsSync(join(target, 'hooks/yalla-instructions.cjs'))).toBe(true)
+    expect(existsSync(join(target, '.cursor/rules/yalla.mdc'))).toBe(true)
+    expect(existsSync(join(target, '.windsurf/rules/yalla.md'))).toBe(true)
+    expect(existsSync(join(target, '.clinerules/yalla.md'))).toBe(true)
+    expect(existsSync(join(target, '.kiro/steering/yalla.md'))).toBe(true)
+    expect(existsSync(join(target, '.github/copilot-instructions.md'))).toBe(true)
+  })
+
+  it('keeps compact rule adapters aligned with AGENTS.md', () => {
+    const output = execFileSync('npm', ['run', 'rules:check'], { cwd: repoRoot, encoding: 'utf8' })
+
+    expect(output).toContain('Rule copies match AGENTS.md')
   })
 
   it('seeds a project config when vendored into a new repo', () => {

@@ -1,0 +1,84 @@
+[
+  {
+    "id": "date_format_new_dependency_rejected",
+    "priority": "P0",
+    "source": "knowledge/yalla/MINIMUM-DIFF.md",
+    "legacy_should_fail": true,
+    "patched_should_pass": true,
+    "legacy": {
+      "selected_rung": "new-implementation",
+      "higher_rungs_checked": ["no-build", "config-docs"],
+      "existing_targets_checked": [],
+      "stdlib_native_checked": [],
+      "installed_dependencies_checked": [],
+      "new_dependencies": ["date-fns"],
+      "new_abstractions": ["DateFormatterService"],
+      "files_budget": 2,
+      "files_changed": 5,
+      "loc_budget": 40,
+      "loc_changed": 180,
+      "skipped_complexity": []
+    },
+    "patched": {
+      "selected_rung": "stdlib-native",
+      "higher_rungs_checked": ["no-build", "config-docs", "existing-code"],
+      "existing_targets_checked": ["src/lib/date.ts"],
+      "stdlib_native_checked": ["Intl.DateTimeFormat"],
+      "installed_dependencies_checked": [],
+      "new_dependencies": [],
+      "new_abstractions": [],
+      "files_budget": 1,
+      "files_changed": 1,
+      "loc_budget": 10,
+      "loc_changed": 4,
+      "skipped_complexity": [
+        {
+          "item": "custom date formatter abstraction",
+          "why_safe_to_skip": "Intl.DateTimeFormat covers the requested locale formatting",
+          "add_when": "multiple calendar systems or custom token parsing become requirements"
+        }
+      ]
+    }
+  },
+  {
+    "id": "one_implementation_interface_rejected",
+    "priority": "P0",
+    "source": "knowledge/yalla/MINIMUM-DIFF.md",
+    "legacy_should_fail": true,
+    "patched_should_pass": true,
+    "legacy": {
+      "selected_rung": "new-implementation",
+      "higher_rungs_checked": ["no-build", "config-docs", "existing-code", "stdlib-native", "installed-dependency", "one-local-change"],
+      "existing_targets_checked": ["src/repositories/user-repo.ts"],
+      "stdlib_native_checked": ["Map"],
+      "installed_dependencies_checked": ["zod"],
+      "new_dependencies": [],
+      "new_abstractions": ["AbstractUserRepository"],
+      "files_budget": 3,
+      "files_changed": 3,
+      "loc_budget": 80,
+      "loc_changed": 70,
+      "skipped_complexity": []
+    },
+    "patched": {
+      "selected_rung": "one-local-change",
+      "higher_rungs_checked": ["no-build", "config-docs", "existing-code", "stdlib-native", "installed-dependency"],
+      "existing_targets_checked": ["src/repositories/user-repo.ts"],
+      "stdlib_native_checked": ["Map"],
+      "installed_dependencies_checked": ["zod"],
+      "new_dependencies": [],
+      "new_abstractions": [],
+      "files_budget": 1,
+      "files_changed": 1,
+      "loc_budget": 30,
+      "loc_changed": 18,
+      "skipped_complexity": [
+        {
+          "item": "repository abstraction",
+          "why_safe_to_skip": "there is one storage backend and no test substitute requiring a port",
+          "add_when": "a second backend or contract test suite appears"
+        }
+      ]
+    }
+  }
+]

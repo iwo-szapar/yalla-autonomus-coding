@@ -32,6 +32,12 @@ export type YallaConfig = {
     smokeCommand?: string
     projectFixturesRequiredBeforeAutopilot?: boolean
   }
+  ceremony: {
+    defaultMode?: string
+    allowUserOverride?: boolean
+    minimumDiffDefaultFilesBudget?: number
+    minimumDiffDefaultLocBudget?: number
+  }
   riskGates: Array<{
     name: string
     triggersOn: string[]
@@ -65,6 +71,7 @@ const DEFAULT_CONFIG: YallaConfig = {
     blockLabels: [],
   },
   evals: {},
+  ceremony: {},
   riskGates: [],
 }
 
@@ -100,6 +107,7 @@ function cloneDefaultConfig(): YallaConfig {
     taskSystem: { blockLabels: [], priorityLabels: [], riskLabels: [] },
     autopilot: { eligibleLabels: [], blockLabels: [] },
     evals: {},
+    ceremony: {},
     riskGates: [],
   }
 }
@@ -182,6 +190,7 @@ function applyNested(config: YallaConfig, parent: string, key: string, rawValue:
   else if (parent === 'task_system') applyTaskSystem(config, key, value)
   else if (parent === 'autopilot') applyAutopilot(config, key, value)
   else if (parent === 'evals') applyEvals(config, key, value)
+  else if (parent === 'ceremony') applyCeremony(config, key, value)
 }
 
 function applyTaskSystem(config: YallaConfig, key: string, value: unknown) {
@@ -207,6 +216,13 @@ function applyAutopilot(config: YallaConfig, key: string, value: unknown) {
 function applyEvals(config: YallaConfig, key: string, value: unknown) {
   if (key === 'smoke_command') config.evals.smokeCommand = stringValue(value)
   else if (key === 'project_fixtures_required_before_autopilot') config.evals.projectFixturesRequiredBeforeAutopilot = booleanValue(value)
+}
+
+function applyCeremony(config: YallaConfig, key: string, value: unknown) {
+  if (key === 'default_mode') config.ceremony.defaultMode = stringValue(value)
+  else if (key === 'allow_user_override') config.ceremony.allowUserOverride = booleanValue(value)
+  else if (key === 'minimum_diff_default_files_budget') config.ceremony.minimumDiffDefaultFilesBudget = numberValue(value)
+  else if (key === 'minimum_diff_default_loc_budget') config.ceremony.minimumDiffDefaultLocBudget = numberValue(value)
 }
 
 function applyRiskGate(riskGate: YallaConfig['riskGates'][number], key: string, value: unknown) {

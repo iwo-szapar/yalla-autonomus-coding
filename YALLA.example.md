@@ -101,6 +101,16 @@ evals:
   smoke_command: "npm run eval:yalla:smoke"
   project_fixtures_required_before_autopilot: true
 
+## Ceremony Defaults (optional)
+
+# Ceremony controls artifact volume and review depth, not proof honesty. Only
+# PROVEN is success in every mode.
+ceremony:
+  default_mode: standard             # lean, standard, strict
+  allow_user_override: true          # /yalla lean ... or /yalla strict ...
+  minimum_diff_default_files_budget: 5
+  minimum_diff_default_loc_budget: 200
+
 ## Memory (optional)
 
 # A durable directive store the pipeline recalls before planning (Phase 0b) and
