@@ -59,6 +59,19 @@ ceremony:
   allow_user_override: true
   minimum_diff_default_files_budget: 3
   minimum_diff_default_loc_budget: 120
+
+requirement_court:
+  enabled: true
+  default_mode: "single-agent-structured"
+  triggers: [non_tiny, high_risk]
+  human_final_approval_required_for: [money, access]
+
+change_snapshots:
+  enabled: true
+  ledger_path: ".pipeline/change-ledger/"
+  triggers: [database, payment, pipeline_config]
+  copy_large_or_binary_files: false
+  auto_rollback: false
 `)
 
     expect(config.repo).toBe('example/repo')
@@ -79,6 +92,15 @@ ceremony:
     expect(config.ceremony.allowUserOverride).toBe(true)
     expect(config.ceremony.minimumDiffDefaultFilesBudget).toBe(3)
     expect(config.ceremony.minimumDiffDefaultLocBudget).toBe(120)
+    expect(config.requirementCourt.enabled).toBe(true)
+    expect(config.requirementCourt.defaultMode).toBe('single-agent-structured')
+    expect(config.requirementCourt.triggers).toEqual(['non_tiny', 'high_risk'])
+    expect(config.requirementCourt.humanFinalApprovalRequiredFor).toEqual(['money', 'access'])
+    expect(config.changeSnapshots.enabled).toBe(true)
+    expect(config.changeSnapshots.ledgerPath).toBe('.pipeline/change-ledger/')
+    expect(config.changeSnapshots.triggers).toEqual(['database', 'payment', 'pipeline_config'])
+    expect(config.changeSnapshots.copyLargeOrBinaryFiles).toBe(false)
+    expect(config.changeSnapshots.autoRollback).toBe(false)
   })
 
   it('loads explicit config paths relative to root dir', () => {

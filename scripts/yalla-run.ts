@@ -253,12 +253,13 @@ function exportBundle(rootDir: string): YallaRunResult {
   const exportDir = resolve(pipelineDir, `export-${new Date().toISOString().replace(/[:.]/g, '-')}`)
   mkdirSync(exportDir, { recursive: true })
   for (const artifact of listPipelineArtifacts(rootDir)) {
+    if (artifact.startsWith('export-')) continue
     const source = resolve(pipelineDir, artifact)
-    if (!existsSync(source) || statSync(source).isDirectory()) continue
-    copyFileSync(source, resolve(exportDir, artifact))
+    if (!existsSync(source)) continue
+    copyArtifact(source, resolve(exportDir, artifact))
   }
   writeFileSync(resolve(exportDir, 'status.json'), `${JSON.stringify(buildStatus(rootDir), null, 2)}\n`)
-  return { exitCode: 0, exportPath: exportDir, status: { exported_artifacts: listDirectoryFiles(exportDir) } }
+  return { exitCode: 0, exportPath: exportDir, status: { exported_artifacts: listDirectoryFilesRecursive(exportDir) } }
 }
 
 function writeGoalContract(rootDir: string, loadedConfig: LoadedYallaConfig, options: RunOptions, now: () => string): YallaRunResult {
@@ -424,6 +425,31 @@ function listPipelineArtifacts(rootDir: string) {
 function listDirectoryFiles(path: string) {
   if (!existsSync(path)) return []
   return readdirSync(path).filter(name => !name.startsWith('.')).sort()
+}
+
+function listDirectoryFilesRecursive(path: string, prefix = ''): string[] {
+  if (!existsSync(path)) return []
+  return readdirSync(path)
+    .filter(name => !name.startsWith('.'))
+    .sort()
+    .flatMap(name => {
+      const relative = prefix ? `${prefix}/${name}` : name
+      const fullPath = resolve(path, name)
+      if (statSync(fullPath).isDirectory()) return listDirectoryFilesRecursive(fullPath, relative)
+      return [relative]
+    })
+}
+
+function copyArtifact(source: string, destination: string) {
+  if (statSync(source).isDirectory()) {
+    mkdirSync(destination, { recursive: true })
+    for (const name of readdirSync(source).filter(entry => !entry.startsWith('.'))) {
+      copyArtifact(resolve(source, name), resolve(destination, name))
+    }
+    return
+  }
+  mkdirSync(resolve(destination, '..'), { recursive: true })
+  copyFileSync(source, destination)
 }
 
 function listCheckpoints(rootDir: string) {

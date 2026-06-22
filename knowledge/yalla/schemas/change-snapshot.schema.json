@@ -1,0 +1,157 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/iwo-szapar/yalla/knowledge/yalla/schemas/change-snapshot.schema.json",
+  "title": "Yalla Change Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "snapshot_id",
+    "session_id",
+    "issue_id",
+    "phase",
+    "risk_gate",
+    "action",
+    "purpose",
+    "reason",
+    "files",
+    "expected_behavior",
+    "verification_plan",
+    "verification_result",
+    "rollback_plan",
+    "redactions",
+    "created_at"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "snapshot_id": {
+      "type": "string",
+      "pattern": "^snap-[A-Za-z0-9._-]+$"
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "issue_id": {
+      "type": "string",
+      "pattern": "^issue-[0-9]+$"
+    },
+    "phase": {
+      "enum": ["before_mutation", "after_mutation", "verification", "rollback_plan", "exception"]
+    },
+    "risk_gate": {
+      "enum": [
+        "database",
+        "payment",
+        "auth",
+        "email",
+        "ai",
+        "generated_artifact",
+        "bulk_edit",
+        "pipeline_config",
+        "security",
+        "dependency",
+        "other"
+      ]
+    },
+    "action": {
+      "enum": ["edit", "generate", "delete", "move", "format", "dependency_change", "metadata_only"]
+    },
+    "purpose": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/file"
+      }
+    },
+    "expected_behavior": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "verification_plan": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "verification_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "commands", "notes"],
+      "properties": {
+        "status": {
+          "enum": ["pending", "passed", "failed", "skipped"]
+        },
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "rollback_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["safe_to_auto_apply", "instructions", "requires_human"],
+      "properties": {
+        "safe_to_auto_apply": {
+          "type": "boolean"
+        },
+        "instructions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requires_human": {
+          "type": "boolean"
+        }
+      }
+    },
+    "redactions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "definitions": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "pre_sha256", "post_sha256", "state"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pre_sha256": {
+          "type": ["string", "null"]
+        },
+        "post_sha256": {
+          "type": ["string", "null"]
+        },
+        "state": {
+          "enum": ["modified", "added", "deleted", "moved", "metadata_only"]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,175 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/iwo-szapar/yalla/knowledge/yalla/schemas/requirement-court.schema.json",
+  "title": "Yalla Requirement Court",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "issue_id",
+    "session_id",
+    "mode",
+    "trigger",
+    "created_at",
+    "raw_request_summary",
+    "goal_contract_ref",
+    "roles",
+    "decision_rule",
+    "judge",
+    "human_confirmation"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "issue_id": {
+      "type": "string",
+      "pattern": "^issue-[0-9]+$"
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mode": {
+      "enum": ["independent-review", "single-agent-structured", "static-advisor"]
+    },
+    "trigger": {
+      "enum": ["non_tiny", "ambiguous", "autopilot", "high_risk", "cross_domain", "manual"]
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "raw_request_summary": {
+      "type": "string"
+    },
+    "goal_contract_ref": {
+      "const": ".pipeline/goal-contract.json"
+    },
+    "roles": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "$ref": "#/definitions/role"
+      }
+    },
+    "decision_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_approvals", "reject_blocks", "human_final_approval_required"],
+      "properties": {
+        "required_approvals": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reject_blocks": {
+          "type": "boolean"
+        },
+        "human_final_approval_required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "judge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "summary",
+        "accepted_scope",
+        "excluded_scope",
+        "required_amendments",
+        "risk_notes"
+      ],
+      "properties": {
+        "decision": {
+          "enum": ["approved", "approved_with_amendments", "blocked", "rejected"]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "accepted_scope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "excluded_scope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "required_amendments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "risk_notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "human_confirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "confirmed_by", "confirmed_at", "notes"],
+      "properties": {
+        "status": {
+          "enum": ["pending", "approved", "rejected", "amended", "not_required"]
+        },
+        "confirmed_by": {
+          "type": ["string", "null"]
+        },
+        "confirmed_at": {
+          "type": ["string", "null"]
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "vote", "confidence", "findings", "required_changes", "blocked_on"],
+      "properties": {
+        "id": {
+          "enum": ["product", "project", "engineering", "testing"]
+        },
+        "vote": {
+          "enum": ["approve", "amend", "reject"]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "required_changes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "blocked_on": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

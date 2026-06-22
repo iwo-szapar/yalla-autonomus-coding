@@ -16,6 +16,7 @@ Required:
 - Test layout fields so the tester knows where tests belong.
 - At least three project gotchas that a new contributor would otherwise miss.
 - A small set of risk gates that match subsystems your repo actually has.
+- Optional requirement court and change snapshot trigger defaults for high-risk or autopilot work.
 
 Recommended before autopilot:
 
@@ -70,6 +71,8 @@ Open `.claude/YALLA.md` and fill these sections in this order:
 - `domains` - map your team's words to subsystems. Use words that appear in issue titles.
 - `gotchas` - specific rules that prevent known mistakes.
 - `risk_gates` - only gates that match real subsystems.
+- `requirement_court` - optional pre-implementation challenge triggers for non-tiny, ambiguous, autopilot, or high-risk work.
+- `change_snapshots` - optional pre/post mutation evidence triggers for high-risk file groups.
 - `autopilot` - keep `enabled: false` until dry-run and readiness checks pass.
 
 ## Minimum Useful `YALLA.md`
@@ -125,6 +128,17 @@ risk_gates:
     triggers_on: [auth]
   - name: payment-integrity-check
     triggers_on: [payments]
+
+requirement_court:
+  enabled: true
+  default_mode: "single-agent-structured"
+  triggers: [non_tiny, ambiguous, autopilot, high_risk, cross_domain]
+
+change_snapshots:
+  enabled: true
+  ledger_path: ".pipeline/change-ledger/"
+  triggers: [database, payment, auth, generated_artifact, pipeline_config, security, dependency]
+  auto_rollback: false
 
 autopilot:
   enabled: false

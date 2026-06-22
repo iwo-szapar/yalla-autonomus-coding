@@ -22,6 +22,8 @@ Rules:
 
 - GitHub Issues are canonical for engineering work; reference work as `issue-###`.
 - Every non-tiny run records a goal contract, acceptance criteria, and evidence before shipping.
+- Non-tiny, ambiguous, autopilot, or high-risk runs challenge the requirement before implementation.
+- High-risk mutation groups record pre/post change snapshots, verification, redactions, and rollback posture.
 - Only `PROVEN` may be described as done, complete, ready to merge, or safe for autopilot.
 - `NOT_PROVEN` and `INCONCLUSIVE` are honest outcomes, not success states.
 - Prefer deterministic proof over model judgment whenever a deterministic seam exists.

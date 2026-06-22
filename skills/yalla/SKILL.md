@@ -50,6 +50,8 @@ If empty, ask "What are we building?" Do not proceed without a clear description
 - Every run must produce `.pipeline/outcome-evaluation.json` before shipping.
 - Every non-tiny run must start from `.pipeline/goal-contract.json` or an equivalent issue body section that names desired end state, success criteria, constraints, budget, forbidden shortcuts, and required evidence. Use `npm run yalla:run -- goal ...` when the cloned Yalla repo is available.
 - Every non-tiny run must append structured lifecycle entries to `.pipeline/events.jsonl` and write checkpoints after classify, plan, each meaningful work slice, test, review, and ship. Use `npm run yalla:run -- event ...` and `npm run yalla:run -- checkpoint ...` when the cloned Yalla repo is available.
+- Every non-tiny, ambiguous, autopilot, or high-risk run must produce `.pipeline/requirement-court.json` before implementation, or explicitly record why the requirement court is not applicable.
+- Every high-risk mutation group must produce change-snapshot evidence under `.pipeline/change-ledger/` before and after the mutation, or explicitly record a justified exception.
 - Executor and evaluator roles are separate. The evaluator reads goal/evidence/diff and writes `.pipeline/evaluator-results.json`; it does not implement its own fixes.
 - Before shipping, generate or refresh `.pipeline/report.html` with `npm run yalla:run -- report` when the run produced meaningful evidence artifacts.
 - Only verdict `PROVEN` may be described as done, complete, ready to merge, or safe for autopilot progression.
@@ -70,6 +72,8 @@ Read these on demand. They are the source of truth for the upgraded pipeline:
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARCHITECTURE-DEPTH.md` — deep-module/locality review vocabulary
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARTIFACTS.md` — evidence schemas and artifact commit policy
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/VERIFIERS.md` — verifier selection, goal contracts, evaluator separation, and long-running loop artifacts
+- `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/REQUIREMENT-COURT.md` — pre-implementation requirement challenge for non-tiny, ambiguous, autopilot, or high-risk work
+- `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/CHANGE-SNAPSHOTS.md` — risk-gated mutation snapshots for high-risk file groups
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/AGENT-BRIEF.md` — durable issue contract
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/PROJECT-CHECKS.md` — universal, risk-triggered, and architecture-doc alignment checks
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/MEMORY-PROTOCOL.md` — optional Phase 0b recall + Phase 5 save, only when `.claude/YALLA.md` sets a `memory:` block
@@ -176,9 +180,13 @@ Classify the task before planning:
 11. Determine `product_intent_gate`:
    - `applies` if the task changes product behavior, user/admin/operator journeys, GTM/pricing/positioning surfaces, money, access, entitlements, delivery, onboarding, public product pages, generated artifacts, or agent workflows that decide what gets built.
    - `n/a` for tiny hotfixes, isolated tests, dependency/config updates, mechanical refactors, or docs edits that do not define future product behavior. Include a specific reason.
-12. Write `.pipeline/classification.json` and add the same fields to `.pipeline-state.json`.
-13. Write or update `.pipeline/goal-contract.json` with success criteria, constraints, budget, forbidden shortcuts, and required evidence.
-14. Record the phase in `.pipeline/events.jsonl` and checkpoint with phase `classify`.
+12. Determine `requirement_court_required` by reading `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/REQUIREMENT-COURT.md`:
+   - `true` for non-tiny work, ambiguous requirements, autopilot-selected work, high-risk surfaces, cross-domain work, or agent-workflow changes.
+   - `false` only for tiny low-risk fixes with clear acceptance criteria.
+13. Determine `change_snapshot_plan` by reading `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/CHANGE-SNAPSHOTS.md` and mapping any high-risk mutation groups.
+14. Write `.pipeline/classification.json` and add the same fields to `.pipeline-state.json`.
+15. Write or update `.pipeline/goal-contract.json` with success criteria, constraints, budget, forbidden shortcuts, and required evidence.
+16. Record the phase in `.pipeline/events.jsonl` and checkpoint with phase `classify`.
 
 ### Conditional routing
 
@@ -191,8 +199,6 @@ Classify the task before planning:
 - Product/GTM/user-flow ambiguity -> load `/product-intent` and record Product Intent before technical planning. Do not use Product Intent to expand scope; use it to narrow the MVP and name kill criteria.
 
 Do not silently downgrade a gate. If a required gate cannot run, record the blocker and ask the user to accept the risk or change scope.
-
----
 
 ## Phase 0: Track
 
@@ -282,6 +288,21 @@ Runs only when `.claude/YALLA.md` defines a `memory:` block with `recall_enabled
 5. Record the recalled directive titles in `.pipeline-state.json` (`recalled_directives`) so the plan and compound phases can reference them. If recall returns nothing, record `recalled_directives: []` and continue.
 
 Recall is read-only. Never block the pipeline on a memory miss; a missing or failed memory store is a skipped phase, not a halt.
+
+---
+
+## Phase 0c: Requirement Court Gate
+
+Run after tracking has produced or resumed an `issue-###` and after the goal contract exists. It must happen before implementation and before accepting a broad plan.
+
+Read `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/REQUIREMENT-COURT.md`. Create `.pipeline/requirement-court.json` when `requirement_court_required: true`; otherwise record the skip reason in `.pipeline/classification.json` or `.pipeline/events.jsonl`.
+
+Blocking rules:
+
+- Any `reject` blocks implementation.
+- Any `amend` requires a goal-contract update before implementation.
+- Pending human confirmation blocks implementation when the work touches money, access, data, outbound communication, destructive action, public commitment, or high-risk product policy.
+- Do not claim `independent-review` when the runtime only produced a single-agent structured court.
 
 ---
 
@@ -375,6 +396,14 @@ Plan structure:
   - Why safe now: [why the success invariant still holds]
   - Add when: [specific future signal]
 
+## Requirement Court
+- Required: [true|false and trigger]
+- Artifact: [`.pipeline/requirement-court.json` or N/A]
+- Mode: [independent-review|single-agent-structured|static-advisor|N/A]
+- Decision: [approved|approved_with_amendments|blocked|rejected|N/A]
+- Required amendments: [none or exact goal-contract changes]
+- Human confirmation: [not_required|pending|approved|rejected|amended]
+
 ## Domain Language
 - [Canonical project terms from your conventions doc (CLAUDE.md / AGENTS.md), .claude/YALLA.md, docs]
 
@@ -462,6 +491,16 @@ Acceptance criteria:
 - architecture-docs-check: [applies/N/A and why]
 - doc-alignment-check: [applies/N/A and why]
 
+## Change Snapshot Plan
+- Required: [true|false]
+- Snapshot triggers: [database|payment|auth|email|ai|generated_artifact|bulk_edit|pipeline_config|security|dependency]
+- Mutation groups:
+  - Risk gate: [gate]
+    Files: [`path`]
+    Pre-snapshot: [planned|not-needed and why]
+    Post-snapshot: [planned|not-needed and why]
+    Rollback plan: [manual steps or requires human]
+
 ## Files Affected
 - `path/file` — why
 
@@ -487,6 +526,11 @@ Acceptance criteria:
 - **Teach-back needed:** yes/no/pending and why
 
 ## Artifact Manifest
+- `.pipeline/goal-contract.json`
+- `.pipeline/events.jsonl`
+- `.pipeline/checkpoints/`
+- `.pipeline/requirement-court.json`
+- `.pipeline/change-ledger/`
 - `.pipeline/architecture-alignment.json`
 - `.pipeline/product-intent.json`
 - `.pipeline/acceptance-trace.json`
@@ -494,6 +538,7 @@ Acceptance criteria:
 - `.pipeline/intent-brief.md`
 - `.pipeline/test-evidence.json`
 - `.pipeline/review-results.json`
+- `.pipeline/evaluator-results.json`
 - `.pipeline/outcome-evaluation.json`
 ```
 
@@ -501,6 +546,7 @@ Artifact policy:
 
 - Commit `.pipeline/*` artifacts only when they explain non-obvious decisions, accepted risks, review findings, or architecture alignment that reviewers need in the diff.
 - Keep routine state artifacts local and summarize them in the PR body instead.
+- Commit run-specific requirement court or change-ledger artifacts only when they are review-relevant, high-risk evidence, or explicitly requested; otherwise summarize them in the PR body.
 - Never commit `.pipeline/ship-manifest.json` solely to record the PR number or final PR check status; that evidence belongs in the PR body or comments because another commit restarts checks and makes it stale.
 - For tiny-hotfix mode, prefer no committed `.pipeline/*` artifacts unless the fix needs an audit trail beyond the issue, PR body, and test output.
 
@@ -511,6 +557,7 @@ After user approval:
 3. If Product Intent applies and the intent is non-obvious or review-relevant, initialize `.pipeline/product-intent.json` with the Product Intent fields and intended behavior claims.
 4. Initialize `.pipeline/acceptance-trace.json` with every acceptance criterion in `status: "pending"`, its proof mode, deterministic-seam decision, and evidence target.
 5. Initialize `.pipeline/progress.md` with planned slices, accepted risks, and the next handoff note when the work is more than a tiny hotfix.
+6. Append a `plan.approved` event to `.pipeline/events.jsonl` and checkpoint with phase `plan`.
 
 ---
 
@@ -524,26 +571,35 @@ After user approval:
    - Confirm the test seam is still the highest correct seam.
    - For UI slices, inspect relevant existing screens/components before coding.
    - Append decisions, failed attempts, and gotchas to `.pipeline/progress.md`.
-4. Execute tracer-bullet loop from `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/VERTICAL-SLICES.md`:
+4. Before any high-risk mutation group, read `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/CHANGE-SNAPSHOTS.md` and record a pre-mutation snapshot entry under `.pipeline/change-ledger/`:
+   - Required for migrations/schema/permissions, payment/webhook, auth/access, email/outbound sends, AI scoring/extraction, generated artifacts, bulk edits, dependency/lockfile changes, agent workflow edits, pipeline config edits, and security-sensitive changes.
+   - Capture action, purpose, reason, affected files, expected behavior, verification plan, rollback plan, and pre-change hashes.
+   - Do not copy `.env*`, secrets, credentials, production exports, customer data, or large/binary files into snapshots.
+   - Append a `snapshot.pre_recorded` event to `.pipeline/events.jsonl` when artifacts are being written.
+5. Execute tracer-bullet loop from `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/VERTICAL-SLICES.md`:
    - For each slice and acceptance criterion, write or request one failing behavior test at the highest correct seam before production implementation.
    - Implement the minimum code to pass that test.
    - Run the targeted test and affected suite before moving to the next criterion.
    - Update `.pipeline/acceptance-trace.json` after each criterion.
    - Update `.pipeline/progress.md` with completed behavior, decisions made, failed attempts, and next-slice handoff.
-5. If no correct seam exists, record `TEST_SEAM_BLOCKED` from `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/TEST-SEAMS.md` and halt for user decision unless the plan already accepted the risk.
-6. Implement the smallest correct change. Do not implement future slices speculatively.
-7. Choose the verification harness when the changed surface needs it:
+6. If no correct seam exists, record `TEST_SEAM_BLOCKED` from `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/TEST-SEAMS.md` and halt for user decision unless the plan already accepted the risk.
+7. Implement the smallest correct change. Do not implement future slices speculatively.
+8. After a high-risk mutation group, record the post-mutation snapshot entry:
+   - Capture post-change hashes, verification result status, commands or artifacts, redactions, and rollback instructions.
+   - Refuse any automatic rollback plan unless the current file hash matches the recorded post-change hash.
+   - Append `snapshot.post_recorded` and `work.slice_completed` events and checkpoint meaningful slices.
+9. Choose the verification harness when the changed surface needs it:
    - UI behavior -> use repo-native Playwright/browser/devtools harnesses when available; capture console/network errors and screenshots or snapshots when they prove the claim.
    - CLI/TUI/script behavior -> use a deterministic local harness or transcript; clean up temporary sessions and artifacts.
    - Measurable claims -> restate the claim in falsifiable form and capture baseline/treatment evidence when feasible.
    - Core user workflows -> run or define the closest end-to-end path the user would manually check. If automation is missing, either add a focused test or record the manual-validation gap as risk.
-8. Run targeted tests after each meaningful chunk.
-9. Run the project's `typecheck` and `build` commands (from `.claude/YALLA.md` `commands:`) where relevant.
+10. Run targeted tests after each meaningful chunk.
+11. Run the project's `typecheck` and `build` commands (from `.claude/YALLA.md` `commands:`) where relevant.
    - On failure, group errors by file/category before editing.
    - Fix the highest-confidence root cause first, not every visible symptom.
    - Rerun the exact failing command after each fix.
-10. For `deep` understanding mode, create or update `plans/active/issue-###-understanding.md` from the protocol template. For `default`, keep the Operator Understanding plan section current.
-11. Update local state to `phase: "3-test"`.
+12. For `deep` understanding mode, create or update `plans/active/issue-###-understanding.md` from the protocol template. For `default`, keep the Operator Understanding plan section current.
+13. Update local state to `phase: "3-test"` and checkpoint with phase `work`.
 
 Security self-check: input validation, SQL safety, auth boundaries, CSP/sanitization, secrets.
 
@@ -612,6 +668,8 @@ Run binary pass/fail checks. Universal checks stay small:
 - **success-invariant-check:** For each changed workflow, can the code report success before the user-visible promise is fulfilled or before an explicit recoverable state is persisted?
 - **test-quality-check:** Do tests verify behavior through the highest correct public interface, and does every acceptance criterion have evidence or an accepted risk?
 - **evidence-check:** Do build/typecheck/test/smoke/claim-verification artifacts prove the stated behavior, and are `INCONCLUSIVE` results handled as risks instead of success?
+- **requirement-court-check:** If requirement court was required, did it approve the accepted scope and are amendments reflected in the goal contract and plan?
+- **change-snapshot-check:** If high-risk mutation snapshots were required, do pre/post entries include hashes, rationale, verification, redactions, and rollback instructions?
 - **reviewability-check:** Can a reviewer understand the intent, risky files, generated/mechanical changes, and test evidence from the PR body and artifacts without reconstructing the run?
 - **documentation-impact-check:** Did the change affect docs, runbooks, examples, generated templates, API references, or architecture claims? If yes, were they updated? If no, is the no-impact reason credible?
 - **intended-vs-implemented-check:** When Product Intent applies, does implementation evidence enforce the documented intent across every touched money, access, data, privacy, delivery, trust, or product-promise boundary?
@@ -663,6 +721,16 @@ After review, write `.pipeline/outcome-evaluation.json`:
     }
   ],
   "remaining_delta": [],
+  "requirement_court": {
+    "required": true,
+    "decision": "approved|approved_with_amendments|blocked|rejected|not_required",
+    "artifact": ".pipeline/requirement-court.json"
+  },
+  "change_snapshots": {
+    "required": true,
+    "artifact": ".pipeline/change-ledger/",
+    "exceptions": []
+  },
   "human_decisions_needed": []
 }
 ```
@@ -723,10 +791,12 @@ Before committing or opening/updating the PR:
 4. Include a risk tier (`low`, `medium`, `high`) and why.
 5. Include documentation impact status and validation artifacts or links.
 6. Include the Minimum Diff summary: selected rung, skipped complexity, why safe now, and add-when signals.
-7. If Product Intent applies, include the outcome, metric/proxy, MVP scope, intended-vs-implemented verdict, and any accepted product assumption risk.
-8. If updating an existing PR, fetch review and discussion comments, group blocking feedback first, and address or explicitly respond to each blocker.
-9. Do not rewrite history, force-push, or clean commits unless the user explicitly approves that separate action.
-10. Read `.pipeline/outcome-evaluation.json`. If verdict is not `PROVEN`, PR copy must say `human review needed` or `not proven`; do not use completion language.
+7. Include requirement court decision when it applied, including mode and any amendments.
+8. Include high-risk change snapshot summary when snapshots applied, including mutation groups, verification status, redactions, and rollback posture.
+9. If Product Intent applies, include the outcome, metric/proxy, MVP scope, intended-vs-implemented verdict, and any accepted product assumption risk.
+10. If updating an existing PR, fetch review and discussion comments, group blocking feedback first, and address or explicitly respond to each blocker.
+11. Do not rewrite history, force-push, or clean commits unless the user explicitly approves that separate action.
+12. Read `.pipeline/outcome-evaluation.json`. If verdict is not `PROVEN`, PR copy must say `human review needed` or `not proven`; do not use completion language.
 
 ---
 
@@ -782,6 +852,17 @@ Decision needed from the operator/maintainer:
 - MVP scope: [smallest shipped slice]
 - Intended-vs-implemented: [Pass/N/A/accepted risk]
 
+## Requirement Court
+- Required: [true|false and why]
+- Mode: [independent-review|single-agent-structured|static-advisor|N/A]
+- Decision: [approved|approved_with_amendments|blocked|rejected|N/A]
+- Amendments/human confirmation: [none or details]
+
+## Change Snapshots
+- Required: [true|false and why]
+- Mutation groups: [summary or N/A]
+- Rollback posture: [manual instructions|requires human|N/A]
+
 ## Reviewer Entry Points
 - [files/flows worth human attention]
 
@@ -800,6 +881,8 @@ Decision needed from the operator/maintainer:
 - [x] security-check: Pass
 - [x] complexity-check: Pass
 - [x] operator-understanding-check: Pass
+- [x] requirement-court-check: Pass [or N/A with reason]
+- [x] change-snapshot-check: Pass [or N/A with reason]
 - [x] intended-vs-implemented-check: Pass [or N/A with reason]
 - [x] success-invariant-check: Pass
 - [x] behavior tests passing through public seams

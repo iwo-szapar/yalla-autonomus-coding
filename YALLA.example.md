@@ -111,6 +111,28 @@ ceremony:
   minimum_diff_default_files_budget: 5
   minimum_diff_default_loc_budget: 200
 
+## Requirement Court Defaults (optional)
+
+# Requirement court is a lightweight pre-implementation challenge for non-tiny,
+# ambiguous, autopilot, or high-risk work. See knowledge/yalla/REQUIREMENT-COURT.md.
+# Projects tune trigger thresholds locally; tiny low-risk fixes can skip it.
+requirement_court:
+  enabled: true
+  default_mode: "single-agent-structured"   # independent-review, single-agent-structured, static-advisor
+  triggers: [non_tiny, ambiguous, autopilot, high_risk, cross_domain]
+  human_final_approval_required_for: [money, access, data, outbound_communication, destructive_action]
+
+## Change Snapshot Defaults (optional)
+
+# Change snapshots are risk-gated pre/post mutation evidence for high-risk file
+# groups. See knowledge/yalla/CHANGE-SNAPSHOTS.md. They are not for every edit.
+change_snapshots:
+  enabled: true
+  ledger_path: ".pipeline/change-ledger/"
+  triggers: [database, payment, auth, email, ai, generated_artifact, bulk_edit, pipeline_config, security, dependency]
+  copy_large_or_binary_files: false
+  auto_rollback: false
+
 ## Memory (optional)
 
 # A durable directive store the pipeline recalls before planning (Phase 0b) and
