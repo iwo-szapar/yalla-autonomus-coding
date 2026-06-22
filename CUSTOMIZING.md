@@ -112,6 +112,52 @@ How aggressively to scope each kind of work: `EXPANSION` (greenfield, new struct
 
 The `autopilot` section documents whether this repo is allowed to run report-only or unattended loops. Keep `enabled: false` and `level: L0` until the queue dry-run works and the checklist in [`docs/autopilot/readiness-checklist.md`](docs/autopilot/readiness-checklist.md) passes. Autopilot uses the same labels described in the task-system onboarding doc.
 
+### Requirement Court (optional)
+
+The `requirement_court` section tunes when Yalla must challenge the goal before
+implementation. The core protocol is in
+[`knowledge/yalla/REQUIREMENT-COURT.md`](knowledge/yalla/REQUIREMENT-COURT.md).
+
+Use it for non-tiny, ambiguous, autopilot, high-risk, or cross-domain work. Keep
+project-specific trigger thresholds in `YALLA.md` or a local wrapper skill; do
+not fork the core protocol just to add local business policy.
+
+```yaml
+requirement_court:
+  enabled: true
+  default_mode: "single-agent-structured"
+  triggers: [non_tiny, ambiguous, autopilot, high_risk, cross_domain]
+  human_final_approval_required_for: [money, access, data, outbound_communication, destructive_action]
+```
+
+The artifact is `.pipeline/requirement-court.json`. It must say whether the
+review was truly independent, a single-agent structured pass, or a static
+advisor/template pass.
+
+### Change Snapshots (optional)
+
+The `change_snapshots` section tunes when high-risk mutation groups need pre/post
+evidence. The core protocol is in
+[`knowledge/yalla/CHANGE-SNAPSHOTS.md`](knowledge/yalla/CHANGE-SNAPSHOTS.md).
+
+Use snapshots for high-risk file groups: migrations/schema/permissions,
+payment/webhook, auth/access, email/outbound sends, AI scoring/extraction,
+generated artifacts, bulk edits, dependency/lockfile changes, agent workflow
+edits, pipeline config edits, and security-sensitive changes.
+
+```yaml
+change_snapshots:
+  enabled: true
+  ledger_path: ".pipeline/change-ledger/"
+  triggers: [database, payment, auth, email, ai, generated_artifact, bulk_edit, pipeline_config, security, dependency]
+  copy_large_or_binary_files: false
+  auto_rollback: false
+```
+
+Snapshots are not for every edit. They are a reviewer-facing risk trail: action,
+purpose, reason, affected files, expected behavior, verification, redactions, and
+rollback posture.
+
 ### Memory (optional)
 
 The `memory` section wires an optional durable-directive store into the pipeline: Phase 0b recalls relevant past directives *before* planning, and the compound phase persists new ones *after* a run proves out. It is **off unless you define the block**, and is independent of `tracking_mode` — you can track tasks in GitHub Issues yet recall learnings from a project store.

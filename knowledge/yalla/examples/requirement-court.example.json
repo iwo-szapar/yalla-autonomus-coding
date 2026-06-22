@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "issue_id": "issue-123",
+  "session_id": "2026-06-22T10-15-00Z-yalla",
+  "mode": "single-agent-structured",
+  "trigger": "high_risk",
+  "created_at": "2026-06-22T10:20:00Z",
+  "raw_request_summary": "Add a requirement challenge and change snapshots to the Yalla run-control pipeline.",
+  "goal_contract_ref": ".pipeline/goal-contract.json",
+  "roles": [
+    {
+      "id": "product",
+      "vote": "amend",
+      "confidence": 0.82,
+      "findings": [
+        "The request is valuable because it catches unclear or risky work before implementation.",
+        "The smallest useful scope is generic protocol docs, config parsing, and install/test coverage."
+      ],
+      "required_changes": [
+        "Keep project-specific policy out of upstream Yalla and let downstream repos configure local triggers."
+      ],
+      "blocked_on": []
+    },
+    {
+      "id": "project",
+      "vote": "approve",
+      "confidence": 0.86,
+      "findings": [
+        "The change fits the existing knowledge-base and install.sh distribution model.",
+        "No migration or external service dependency is required."
+      ],
+      "required_changes": [],
+      "blocked_on": []
+    },
+    {
+      "id": "engineering",
+      "vote": "approve",
+      "confidence": 0.88,
+      "findings": [
+        "The implementation can stay local to markdown protocols, config parsing, and contract tests.",
+        "The new artifacts should remain under .pipeline/ in consuming repos."
+      ],
+      "required_changes": [],
+      "blocked_on": []
+    },
+    {
+      "id": "testing",
+      "vote": "amend",
+      "confidence": 0.8,
+      "findings": [
+        "The install path must be tested because nested schema/example files are easy to omit."
+      ],
+      "required_changes": [
+        "Add a contract test proving install.sh vendors the new nested files and rewrites plugin-root references."
+      ],
+      "blocked_on": []
+    }
+  ],
+  "decision_rule": {
+    "required_approvals": 3,
+    "reject_blocks": true,
+    "human_final_approval_required": false
+  },
+  "judge": {
+    "decision": "approved_with_amendments",
+    "summary": "Proceed after limiting upstream scope to generic run-control protocols and adding install coverage.",
+    "accepted_scope": [
+      "Generic Requirement Court protocol, schema, and example.",
+      "Generic Change Snapshots protocol, schema, and example.",
+      "YALLA config parsing and docs wiring."
+    ],
+    "excluded_scope": [
+      "Project-specific SBF policy.",
+      "Automatic rollback execution.",
+      "A database-backed court service."
+    ],
+    "required_amendments": [
+      "Document the generic/local overlay boundary.",
+      "Test nested protocol file installation."
+    ],
+    "risk_notes": [
+      "Downstream repos may overuse the court unless docs keep tiny fixes exempt.",
+      "Snapshots must avoid secrets, raw customer data, and large binary copies."
+    ]
+  },
+  "human_confirmation": {
+    "status": "not_required",
+    "confirmed_by": null,
+    "confirmed_at": null,
+    "notes": "No money, access, user data, outbound communication, or destructive action is changed."
+  }
+}

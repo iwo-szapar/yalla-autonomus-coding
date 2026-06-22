@@ -14,11 +14,11 @@ Yalla is an autonomous coding pipeline for [Claude Code](https://claude.com/clau
         │  architecture · test seams · task classification         │  every phase
         └────────────────────────────┬───────────────────────────┘
                                       ▼
- minimum-diff ─▶ classify ─▶ track ─▶ plan ─▶ work ─▶ test ─▶ review ─▶ compound ─▶ ship
+ minimum-diff ─▶ classify ─▶ track ─▶ court ─▶ plan ─▶ work ─▶ test ─▶ review ─▶ compound ─▶ ship
     │                  │       │       │        │           │          │
-  pick     adversarial build  write & binary  learnings   PR — only
-  ceremony + diagnosis vertical run    pass/   fed back    if verdict
-  + gates  plan        slices  tests   fail    into the    is PROVEN
+  pick       create   challenge write & binary learnings   PR — only
+  ceremony   issue    goal      run     pass/   fed back    if verdict
+  + gates             plan      tests   fail    into the    is PROVEN
                                        gates   knowledge
                                       ▲
         ┌─────────────────────────────┴──────────────────────────┐
@@ -38,8 +38,9 @@ Two things wrap the linear pipeline and make it more than a prompt: the **knowle
 |-------|--------------|
 | **0 · Minimum Diff + Classify** | Runs the minimum-diff ladder, then picks a `task_type`, risk tier, ceremony mode, evidence mode, and gates. A no-build/docs/config answer, one-line fix, and payment-flow change get different ceremony. |
 | **1 · Track** | Creates (or resumes) a GitHub issue and a worktree branch. |
+| **1b · Requirement Court** | For non-tiny, ambiguous, autopilot, or high-risk work, challenges the tracked goal through product, project, engineering, testing, and judge roles before implementation. |
 | **2 · Plan** | Researches the codebase, designs an approach, and adversarially challenges it. Bugs run a diagnosis gate first. You approve before any code is written. |
-| **3 · Work** | Builds in vertical slices — each one a thin, demoable end-to-end behavior — writing a failing behavior test at the highest correct seam before the implementation that passes it. |
+| **3 · Work** | Builds in vertical slices — each one a thin, demoable end-to-end behavior — writing a failing behavior test at the highest correct seam before the implementation that passes it. High-risk mutation groups record change snapshots. |
 | **4 · Test** | Runs the suite until green, verifies every acceptance criterion maps to evidence, and records falsifiable verification (`VERIFIED` / `NOT VERIFIED` / `INCONCLUSIVE`). |
 | **5 · Review** | Independent reviewers each answer **one** binary question (security? complexity? correctness?). Any Fail blocks the ship. The author never reviews their own code. |
 | **6 · Compound** | Captures actionable learnings to their smallest lasting home so the same mistake isn't repeated. |
@@ -84,6 +85,8 @@ A run leaves a trail under `.pipeline/` so a reviewer can decide where to look c
 - `events.jsonl` — append-only run timeline: phase starts, tool/command notes, human decisions, checkpoints, and ship events.
 - `checkpoints/` + `latest-checkpoint.json` — resumable save points after classify, plan, each work slice, test, review, and ship.
 - `goal-contract.json` — desired end state, success criteria, constraints, budget, forbidden shortcuts, and required evidence.
+- `requirement-court.json` — pre-implementation challenge for non-tiny, ambiguous, autopilot, or high-risk work; see [`REQUIREMENT-COURT.md`](knowledge/yalla/REQUIREMENT-COURT.md).
+- `change-ledger/` — risk-gated pre/post mutation evidence for high-risk file groups; see [`CHANGE-SNAPSHOTS.md`](knowledge/yalla/CHANGE-SNAPSHOTS.md).
 - `evaluator-results.json` / `loop-state.json` — independent evaluator verdicts and long-running loop decisions.
 - `visual-evidence/` / `benchmarks.json` — optional screenshot, image, and benchmark evidence rendered into the local report.
 - `acceptance-trace.json` — every criterion, its proof mode, and its evidence status.
@@ -100,7 +103,7 @@ The pipeline engine is generic — what makes a run *yours* is the knowledge bas
 
 - **Your gotchas** — the non-obvious rules a new contributor trips on, loaded as hard constraints into every run (defined in your `YALLA.md`).
 - **Review checks** ([`REVIEW-CHECKS.md`](knowledge/yalla/REVIEW-CHECKS.md)) — the binary pass/fail library, including a risk-gate set (payments, migrations, auth, async, email, generated artifacts, UI) that arms only when the diff touches that subsystem.
-- **Project checks, minimum-diff, task classification, test seams, vertical slices, architecture depth, diagnosis** — the methodology files that tell the agents *how* to scope, plan, build, and verify.
+- **Project checks, minimum-diff, task classification, requirement court, change snapshots, test seams, vertical slices, architecture depth, diagnosis** — the methodology files that tell the agents *how* to scope, challenge, plan, build, and verify.
 
 It's also a **closed loop**: the **compound** phase routes each run's learnings back into the knowledge base and your `YALLA.md` gotchas, so the same mistake doesn't recur — the pipeline gets sharper the more you run it. A mature config (see [`examples/sbf/`](examples/sbf/)) carries a couple dozen earned gotchas and a full risk-gate map. An optional [**memory**](knowledge/yalla/MEMORY-PROTOCOL.md) subsystem can also persist those learnings to a project store and recall them before planning (off by default; enabled per-repo via a `memory:` block in `YALLA.md`).
 
@@ -180,8 +183,9 @@ your-project/.claude/
 ├── skills/            yalla, yalla-plan, yalla-review, yalla-simplify,
 │                      yalla-simplify-audit, yalla-team, yalla-audit
 ├── agents/            yalla-lead, yalla-implementer, yalla-tester, yalla-reviewer
-├── knowledge/yalla/   pipeline mechanics (classification, diagnosis, slices,
-│                      seams, artifacts, review checks) + your project checks
+├── knowledge/yalla/   pipeline mechanics (classification, diagnosis, court,
+│                      snapshots, slices, seams, artifacts, review checks)
+│                      + your project checks
 └── YALLA.md           ← your config (the one file you edit)
 ```
 
@@ -200,13 +204,15 @@ npm run yalla:onboard -- template --dry-run --config /path/to/your-project/.clau
 
 ## Configure
 
-Open `.claude/YALLA.md` and set five things:
+Open `.claude/YALLA.md` and set the core project profile:
 
 1. **base_branch** — what PRs target (`main`, `develop`, `staging`, …).
 2. **commands** — your `test` / `typecheck` / `build` / `lint` commands.
 3. **test_dir** — where tests live.
 4. **gotchas** — the non-obvious rules a new contributor trips on. This is where your project's hard-won scar tissue lives.
 5. **risk_gates** — which subsystem checks to arm (payments, migrations, async, auth, …).
+6. Optional **requirement_court** and **change_snapshots** — tune when high-risk
+   work needs pre-implementation challenge and pre/post mutation evidence.
 
 That's the whole adaptation. No code changes. See [`CUSTOMIZING.md`](CUSTOMIZING.md).
 

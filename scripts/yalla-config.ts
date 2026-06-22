@@ -38,6 +38,19 @@ export type YallaConfig = {
     minimumDiffDefaultFilesBudget?: number
     minimumDiffDefaultLocBudget?: number
   }
+  requirementCourt: {
+    enabled?: boolean
+    defaultMode?: string
+    triggers: string[]
+    humanFinalApprovalRequiredFor: string[]
+  }
+  changeSnapshots: {
+    enabled?: boolean
+    ledgerPath?: string
+    triggers: string[]
+    copyLargeOrBinaryFiles?: boolean
+    autoRollback?: boolean
+  }
   riskGates: Array<{
     name: string
     triggersOn: string[]
@@ -72,6 +85,13 @@ const DEFAULT_CONFIG: YallaConfig = {
   },
   evals: {},
   ceremony: {},
+  requirementCourt: {
+    triggers: [],
+    humanFinalApprovalRequiredFor: [],
+  },
+  changeSnapshots: {
+    triggers: [],
+  },
   riskGates: [],
 }
 
@@ -108,6 +128,8 @@ function cloneDefaultConfig(): YallaConfig {
     autopilot: { eligibleLabels: [], blockLabels: [] },
     evals: {},
     ceremony: {},
+    requirementCourt: { triggers: [], humanFinalApprovalRequiredFor: [] },
+    changeSnapshots: { triggers: [] },
     riskGates: [],
   }
 }
@@ -191,6 +213,8 @@ function applyNested(config: YallaConfig, parent: string, key: string, rawValue:
   else if (parent === 'autopilot') applyAutopilot(config, key, value)
   else if (parent === 'evals') applyEvals(config, key, value)
   else if (parent === 'ceremony') applyCeremony(config, key, value)
+  else if (parent === 'requirement_court') applyRequirementCourt(config, key, value)
+  else if (parent === 'change_snapshots') applyChangeSnapshots(config, key, value)
 }
 
 function applyTaskSystem(config: YallaConfig, key: string, value: unknown) {
@@ -223,6 +247,21 @@ function applyCeremony(config: YallaConfig, key: string, value: unknown) {
   else if (key === 'allow_user_override') config.ceremony.allowUserOverride = booleanValue(value)
   else if (key === 'minimum_diff_default_files_budget') config.ceremony.minimumDiffDefaultFilesBudget = numberValue(value)
   else if (key === 'minimum_diff_default_loc_budget') config.ceremony.minimumDiffDefaultLocBudget = numberValue(value)
+}
+
+function applyRequirementCourt(config: YallaConfig, key: string, value: unknown) {
+  if (key === 'enabled') config.requirementCourt.enabled = booleanValue(value)
+  else if (key === 'default_mode') config.requirementCourt.defaultMode = stringValue(value)
+  else if (key === 'triggers') config.requirementCourt.triggers = arrayValue(value)
+  else if (key === 'human_final_approval_required_for') config.requirementCourt.humanFinalApprovalRequiredFor = arrayValue(value)
+}
+
+function applyChangeSnapshots(config: YallaConfig, key: string, value: unknown) {
+  if (key === 'enabled') config.changeSnapshots.enabled = booleanValue(value)
+  else if (key === 'ledger_path') config.changeSnapshots.ledgerPath = stringValue(value)
+  else if (key === 'triggers') config.changeSnapshots.triggers = arrayValue(value)
+  else if (key === 'copy_large_or_binary_files') config.changeSnapshots.copyLargeOrBinaryFiles = booleanValue(value)
+  else if (key === 'auto_rollback') config.changeSnapshots.autoRollback = booleanValue(value)
 }
 
 function applyRiskGate(riskGate: YallaConfig['riskGates'][number], key: string, value: unknown) {
