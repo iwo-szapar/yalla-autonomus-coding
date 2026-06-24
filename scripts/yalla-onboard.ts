@@ -65,12 +65,25 @@ const CANONICAL_RISK_GATES = new Set([
   'email-delivery-check',
   'generated-artifact-check',
   'ui-journey-check',
+  'browser-interaction-check',
   'operator-understanding-check',
   'memory-routing-check',
 ])
 
 const CANONICAL_MODEL_ROUTES = new Set(['classify', 'plan', 'implement', 'test', 'review', 'summarize'])
-const CANONICAL_VERIFIERS = new Set(['api', 'ui', 'perf', 'docs', 'research', 'visual', 'benchmark', 'security', 'accessibility'])
+const CANONICAL_VERIFIERS = new Set([
+  'api',
+  'ui',
+  'browser_interactions',
+  'perf',
+  'docs',
+  'research',
+  'visual',
+  'benchmark',
+  'security',
+  'accessibility',
+])
+const TRACKING_MODES = new Set(['github', 'linear', 'file-only', 'db'])
 
 export type OnboardResult = {
   exitCode: number
@@ -127,7 +140,8 @@ async function runCheck(rootDir: string, loadedConfig: LoadedYallaConfig, comman
   const config = loadedConfig.config
   checks.push({ name: 'config', status: loadedConfig.path ? 'pass' : 'fail', detail: loadedConfig.path ?? 'Missing .claude/YALLA.md or --config path' })
   checks.push({ name: 'base_branch', status: config.baseBranch ? 'pass' : 'fail', detail: config.baseBranch ?? 'Missing base_branch' })
-  checks.push({ name: 'tracking_mode', status: config.trackingMode ? 'pass' : 'warn', detail: config.trackingMode ?? 'Defaulting to github' })
+  checks.push(trackingModeCheck(config.trackingMode))
+  checks.push(taskSystemProviderCheck(config.trackingMode, config.taskSystem))
   checks.push(commandCheck('commands.test', config.commands.test))
   checks.push(commandCheck('commands.typecheck', config.commands.typecheck))
   checks.push(commandCheck('commands.build', config.commands.build))
@@ -150,6 +164,42 @@ async function runCheck(rootDir: string, loadedConfig: LoadedYallaConfig, comman
 
   const hasFailure = checks.some(check => check.status === 'fail')
   return { exitCode: hasFailure ? 1 : 0, checks }
+}
+
+function trackingModeCheck(value: string | undefined): Check {
+  const mode = value || 'github'
+  if (!value) return { name: 'tracking_mode', status: 'warn', detail: 'Defaulting to github' }
+  if (!TRACKING_MODES.has(mode)) return { name: 'tracking_mode', status: 'fail', detail: `Unknown tracking_mode=${mode}` }
+  return { name: 'tracking_mode', status: 'pass', detail: mode }
+}
+
+function taskSystemProviderCheck(
+  trackingMode: string | undefined,
+  taskSystem: LoadedYallaConfig['config']['taskSystem']
+): Check {
+  const mode = trackingMode || 'github'
+  const provider = taskSystem.provider || mode
+
+  if (mode === 'linear' || provider === 'linear') {
+    const hasStates = taskSystem.readyStates.length > 0 && Boolean(taskSystem.inProgressState && taskSystem.reviewState)
+    const hasScope = Boolean(taskSystem.team || taskSystem.project)
+    if (!hasStates) {
+      return {
+        name: 'task_system_provider',
+        status: 'warn',
+        detail: 'Linear configured; add ready_states, in_progress_state, and review_state so status transitions are unambiguous',
+      }
+    }
+    return {
+      name: 'task_system_provider',
+      status: hasScope ? 'pass' : 'warn',
+      detail: hasScope
+        ? `Linear provider configured (${taskSystem.team || taskSystem.project})`
+        : 'Linear provider configured; add team or project to narrow queue selection',
+    }
+  }
+
+  return { name: 'task_system_provider', status: 'pass', detail: `Provider=${provider}` }
 }
 
 function commandCheck(name: string, value: string | undefined): Check {

@@ -19,7 +19,7 @@ The dry-run path must remain safe:
 - Make no GitHub mutations.
 - Never claim completion unless the run's proof-contract verdict is `PROVEN`.
 
-The queue dry-run writes `.pipeline/autopilot-queue-report.json`. It uses `yalla-ready` as the default eligibility label and skips `blocked`, `needs-human`, and `do-not-autopilot` by default.
+The queue dry-run writes `.pipeline/autopilot-queue-report.json`. In GitHub mode it uses `yalla-ready` as the default eligibility label and skips `blocked`, `needs-human`, and `do-not-autopilot` by default. In Linear mode it uses the configured `ready_states` plus any equivalent labels and writes the same local report before mutating Linear.
 
 ## Operating Levels
 
@@ -40,6 +40,7 @@ Default posture is PR-only. Do not auto-merge unless the target repo explicitly 
 Queue selection should be boring and auditable. A scheduled loop should only consider issues that satisfy all required filters:
 
 - Issue has an explicit automation label, for example `yalla-ready`.
+- For Linear, issue state is in `task_system.ready_states` and team/project scope matches the repo config.
 - Issue is open and not already linked to an active branch, PR, or lock file.
 - Issue has enough context to produce acceptance criteria without guessing.
 - Issue is not labeled `blocked`, `needs-human`, `do-not-autopilot`, or equivalent.

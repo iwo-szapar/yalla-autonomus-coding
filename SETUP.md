@@ -5,7 +5,7 @@ Get Yalla running in your repo in about five minutes.
 ## Prerequisites
 
 - **[Claude Code](https://claude.com/claude-code)** — Yalla is a set of skills and agents that run inside it.
-- **[GitHub CLI](https://cli.github.com)** — run `gh auth login` once. Yalla uses it to create issues and open PRs. If you skip this while `tracking_mode: github`, Yalla halts; use `tracking_mode: file-only` only when you deliberately do not want GitHub tracking.
+- **[GitHub CLI](https://cli.github.com)** — run `gh auth login` once. Yalla uses it to open PRs and, in `tracking_mode: github`, to create/read issues. If you skip this while `tracking_mode: github`, Yalla halts; use `tracking_mode: linear` for Linear-backed work or `file-only` only when you deliberately do not want external tracking.
 - **git** — you're shipping branches and PRs, so a normal git repo with a remote.
 - **Node 20+** — only if you want to run the eval harness (`eval/yalla/`). The pipeline itself doesn't need it; your project's own toolchain does.
 
@@ -84,12 +84,13 @@ Open `.claude/YALLA.md` and set these things. Everything else has sane defaults.
 3. **models** — optional phase-level model hints (`classify`, `plan`, `implement`, `test`, `review`, `summarize`) so cost/quality routing is visible in doctor/status/report output.
 4. **verifiers** — optional proof commands or artifact locations (`api`, `ui`, `perf`, `docs`, `visual`, etc.) so success evidence is explicit before long-running loops.
 5. **test_dir** — where tests live, so the tester puts new tests in the right place.
-6. **gotchas** — the non-obvious rules a new contributor trips on. This is your project's scar tissue. Start with two or three real ones; you'll add more as the pipeline catches mistakes.
-7. **risk_gates** — which subsystem checks to arm (payments, migrations, async, auth, …). Only the ones that match your stack.
+6. **task_system** — GitHub labels or Linear states that define ready/in-progress/review/blocked/done.
+7. **gotchas** — the non-obvious rules a new contributor trips on. This is your project's scar tissue. Start with two or three real ones; you'll add more as the pipeline catches mistakes.
+8. **risk_gates** — which subsystem checks to arm (payments, migrations, async, auth, browser interactions, …). Only the ones that match your stack.
 
 That's the whole adaptation. No code changes. The deeper "how do I fit this to my project" guidance lives in [CUSTOMIZING.md](CUSTOMIZING.md).
 
-If you use GitHub tracking, also create the labels and issue template from [`docs/onboarding/task-system.md`](docs/onboarding/task-system.md) before trying queue dry-run or scheduled automation.
+If you use GitHub tracking, also create the labels and issue template from [`docs/onboarding/task-system.md`](docs/onboarding/task-system.md) before trying queue dry-run or scheduled automation. If you use Linear tracking, configure the Linear state mapping in `task_system` and keep automation in dry-run/report-only mode until Yalla can read the issue, write the plan comment, attach the PR, and post the final proof verdict without manual setup.
 
 ## Your first task
 
@@ -161,12 +162,15 @@ You don't need any of this to use Yalla day to day. It's there to keep the proof
 Set `tracking_mode` in `YALLA.md`.
 
 - **`github`** (default) — GitHub Issues are the canonical task store. Each run is an `issue-###`. Recommended; survives across machines and is visible to your whole team.
+- **`linear`** — Linear issues are the canonical task store. Each run is a tracker issue such as `CAP-123`; GitHub still receives the code branch and PR. Use this when product/engineering work already lives in Linear and the bottleneck is plan/setup/test handoff.
 - **`file-only`** — no external store. State lives in `.pipeline-state.json` and `plans/`. Use this deliberately for private experiments or repos without a GitHub remote.
 - **`db`** — advanced. A SQL task table backs the run. See `knowledge/yalla/SQL-TEMPLATES.md`. Only reach for this if you already run a project tracker in Postgres and want Yalla to write to it.
 
 ## Troubleshooting
 
 **`gh` not authenticated** — GitHub tracking halts because the issue is the canonical work record. Run `gh auth login` and re-run. If you intentionally want local-only tracking, set `tracking_mode: file-only` in `YALLA.md`.
+
+**Linear issue not picked up** — confirm `tracking_mode: linear`, `task_system.provider: linear`, and that `ready_states`, `in_progress_state`, and `review_state` match the exact Linear workflow names. Queue selection should never guess from screenshots or free text when the state mapping is missing.
 
 **"No test command" / tests don't run** — your `commands.test` in `YALLA.md` is empty or wrong. Set it to the exact command you run by hand (e.g. `npm test`, `pytest`, `go test ./...`). If your project genuinely has no tests, leave it `""` — the test gate is skipped, but you lose the safety net and most runs will land `INCONCLUSIVE` instead of `PROVEN`.
 

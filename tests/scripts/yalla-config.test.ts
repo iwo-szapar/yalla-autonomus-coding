@@ -32,12 +32,21 @@ models:
 
 verifiers:
   api: "npm test"
+  browser_interactions: "npm run test:e2e -- --grep @browser-interaction"
   visual: ".pipeline/visual-evidence/"
 
 task_system:
+  provider: linear
   ready_label: ready-for-ai
   block_labels: [blocked, needs-human]
   priority_labels: [p0, p1, p2]
+  ready_states: [Ready, Selected]
+  in_progress_state: "In Progress"
+  review_state: "In Review"
+  blocked_state: "Needs Human"
+  done_state: Done
+  team: CAP
+  project: "Marketing Website"
   issue_template: ".github/ISSUE_TEMPLATE/yalla-task.md"
 
 autopilot:
@@ -66,8 +75,17 @@ ceremony:
     expect(config.commands.typecheck).toBe('')
     expect(config.models.review).toBe('opus')
     expect(config.verifiers.api).toBe('npm test')
+    expect(config.verifiers.browser_interactions).toBe('npm run test:e2e -- --grep @browser-interaction')
+    expect(config.taskSystem.provider).toBe('linear')
     expect(config.taskSystem.readyLabel).toBe('ready-for-ai')
     expect(config.taskSystem.blockLabels).toEqual(['blocked', 'needs-human'])
+    expect(config.taskSystem.readyStates).toEqual(['Ready', 'Selected'])
+    expect(config.taskSystem.inProgressState).toBe('In Progress')
+    expect(config.taskSystem.reviewState).toBe('In Review')
+    expect(config.taskSystem.blockedState).toBe('Needs Human')
+    expect(config.taskSystem.doneState).toBe('Done')
+    expect(config.taskSystem.team).toBe('CAP')
+    expect(config.taskSystem.project).toBe('Marketing Website')
     expect(config.autopilot.eligibleLabels).toEqual(['ready-for-ai'])
     expect(config.autopilot.blockLabels).toEqual(['do-not-autopilot'])
     expect(config.autopilot.maxIterations).toBe(4)

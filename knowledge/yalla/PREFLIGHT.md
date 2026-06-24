@@ -2,9 +2,10 @@
 
 Run this before Phase 0. It determines how task state is tracked for the run and verifies the base branch is healthy.
 
-Yalla supports two primary tracking modes, declared via `tracking_mode` in `.claude/YALLA.md`:
+Yalla supports these tracking modes, declared via `tracking_mode` in `.claude/YALLA.md`:
 
 - **`github`** (default, recommended) — GitHub Issues are the canonical task store. IDs are `issue-###`.
+- **`linear`** — Linear issues are the canonical task store. IDs are tracker keys such as `CAP-123`; GitHub still hosts branches and PRs.
 - **`file-only`** — no external store; state lives in `.pipeline-state.json` + `plans/`.
 
 (A `db` mode exists for advanced setups — see the optional "DB mode" subsection below.)
@@ -13,7 +14,9 @@ Yalla supports two primary tracking modes, declared via `tracking_mode` in `.cla
 
 Read `tracking_mode` from `.claude/YALLA.md`. If absent, default to `github`.
 
-## Step 2: GitHub connectivity check (primary)
+## Step 2: Tracker connectivity check
+
+### GitHub mode
 
 ```bash
 gh auth status
@@ -43,6 +46,19 @@ gh auth status
   To intentionally run without GitHub, set `tracking_mode: file-only` in .claude/YALLA.md and re-run.
   ```
 - Do not create a local issue ID or plan file in this mode.
+
+### Linear mode
+
+When `tracking_mode` is `linear`, read `task_system` from `.claude/YALLA.md` and verify:
+
+- `provider: linear`
+- `ready_states` includes every state eligible for queue/report selection
+- `in_progress_state`, `review_state`, and `blocked_state` match exact Linear workflow state names
+- `team` or `project` narrows queue selection enough to avoid scanning unrelated work
+
+Use the Linear connector, CLI, or API available in the host environment to read the issue. Record the access method in `.pipeline-state.json`. In dry-run/report-only modes, do not mutate Linear.
+
+GitHub is still needed for PR creation. If `gh` is unavailable in Linear mode, continue through plan/report-only work, but do not claim the run can ship a PR until GitHub auth is restored.
 
 **If `tracking_mode` is `file-only`:**
 
@@ -76,8 +92,9 @@ Write or update `.pipeline-state.json` with:
 
 ```json
 {
-  "tracking_mode": "github",
+  "tracking_mode": "github|linear|file-only|db",
   "github_available": true,
+  "tracker_available": true,
   "base_branch": "main",
   "phase": "0-classify"
 }
