@@ -283,6 +283,20 @@ Specifics to check:
 - Users can retry after fixable errors
 - Mobile width around 375px remains usable
 
+### Run for browser interaction changes:
+
+Trigger when the diff touches editors, autosave, debounced inputs, optimistic cache writes, SPA navigation, focus/caret behavior, or a manual QA repro that can only be observed in a browser.
+
+**browser-interaction-check:**
+> "Does browser evidence prove the interaction invariant a human would otherwise test manually?"
+
+Specifics to check:
+- Typed text is not lost or reverted during save/debounce/optimistic-update cycles
+- Caret, selection, and focus remain stable for the changed interaction
+- Navigation away/back and reload preserve the expected saved state when durability is part of the claim
+- Browser evidence captures unexpected console errors and failed network requests
+- If automation is unavailable, the PR records `TEST_SEAM_BLOCKED` or manual-smoke evidence instead of claiming deterministic proof
+
 ---
 
 ## Step 3: Collect Results

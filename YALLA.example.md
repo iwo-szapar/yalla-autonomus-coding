@@ -44,6 +44,7 @@ models:
 verifiers:
   api: "npm test"
   ui: "npm run test:e2e"
+  browser_interactions: "npm run test:e2e -- --grep @browser-interaction"
   perf: "npm run benchmark"
   docs: "npm run docs:check"
   visual: ".pipeline/visual-evidence/"
@@ -58,6 +59,7 @@ test_setup_file: tests/setup.ts   # shared setup, or "" if none
 ## Task Tracking
 
 # "github" (default, recommended): GitHub Issues are the canonical task store.
+# "linear": Linear issues are the canonical task store; GitHub still receives PRs.
 # "file-only": no external store; state lives in .pipeline-state.json + plans/.
 # "db": advanced — a SQL task table (see knowledge/yalla/SQL-TEMPLATES.md).
 tracking_mode: github
@@ -69,11 +71,21 @@ issue_id_format: "issue-###"      # how the pipeline refers to a unit of work
 # autopilot. See docs/onboarding/task-system.md for setup commands and the
 # recommended issue template.
 task_system:
+  provider: github                 # github, linear, db, or file-only
   ready_label: yalla-ready
   block_labels: [blocked, needs-human, do-not-autopilot]
   priority_labels: [p0, p1, p2]
   risk_labels: [risk:low, risk:medium, risk:high]
   issue_template: ".github/ISSUE_TEMPLATE/yalla-task.md"
+  # Linear teams can use the same portable pipeline by setting:
+  # provider: linear
+  # team: "ENG"
+  # project: "Marketing Website"
+  # ready_states: [Ready, Selected]
+  # in_progress_state: "In Progress"
+  # review_state: "In Review"
+  # blocked_state: "Needs Human"
+  # done_state: Done
 
 ## Autopilot Defaults (optional)
 
@@ -172,6 +184,8 @@ risk_gates:
     triggers_on: [auth]
   - name: ui-journey-check
     triggers_on: [frontend]
+  - name: browser-interaction-check
+    triggers_on: [frontend, editor, autosave, form]
   - name: doc-alignment-check
     triggers_on: [api, public-docs]
   - name: memory-routing-check       # only meaningful when a `memory:` store is configured

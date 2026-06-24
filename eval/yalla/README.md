@@ -44,7 +44,7 @@ The proof-contract command prints a JSON report showing:
 
 The test-inventory command validates `eval/yalla/test-inventory.json` and its fixtures. It enforces:
 
-- Payment, auth/security, async jobs, generated artifacts, UI journeys, and schema/migration categories are represented.
+- Payment, auth/security, async jobs, generated artifacts, UI journeys, browser-interaction regressions, task tracking, and schema/migration categories are represented.
 - Each category maps to existing tests or explicit coverage gaps.
 - Missing or weak verification commands are `NOT_PROVEN` or `INCONCLUSIVE`, never `PROVEN`.
 - Model judges are forbidden when deterministic seams exist.
@@ -101,4 +101,6 @@ The fixture `source` fields cite the original SBF incidents, learnings, and PRDs
 - `async-jobs`
 - `generated-artifacts`
 - `ui-journeys`
+- `browser-interactions`
+- `task-tracking`
 - `schema-migration`

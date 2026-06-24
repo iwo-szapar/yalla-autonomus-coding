@@ -2,7 +2,7 @@
 name: yalla
 description: >
   Adaptive autonomous pipeline: classify -> track -> plan -> work -> test -> review -> compound -> ship.
-  Uses GitHub Issues as the canonical engineering task store (`issue-###`).
+  Uses the configured task store as the canonical work record: GitHub Issues by default, Linear when configured, file-only/db only by explicit opt-in.
   Use when building any feature, fix, or change that needs tracking inside this repo.
   Do NOT use for docs/config-only changes (use /quick) or when you just need
   task tracking without autonomous execution (use /begin).
@@ -11,11 +11,11 @@ argument_hint: "[description of what to build, or issue-### to resume]"
 
 # /yalla
 
-Adaptive autonomous development pipeline. It classifies the task, chooses the right engineering path, creates or resumes a GitHub issue, plans from domain/code evidence, builds in vertical tracer-bullet slices, tests through public interfaces, reviews with binary gates, captures learnings, and ships a PR.
+Adaptive autonomous development pipeline. It classifies the task, chooses the right engineering path, creates or resumes a tracked issue, plans from domain/code evidence, builds in vertical tracer-bullet slices, tests through public interfaces, reviews with binary gates, captures learnings, and ships a PR.
 
 Default shipping policy: create a PR only. Do not merge unless the user explicitly asked for auto-merge in this run.
 
-`$REPO` is the target repository, resolved from `repo:` in `.claude/YALLA.md`, or auto-detected with `gh repo view --json nameWithOwner -q .nameWithOwner`. `$BASE_BRANCH` is the branch new work is cut from and PRs target, resolved from `base_branch:` in `.claude/YALLA.md` (default `main`). Build/test commands come from the `commands:` block in `.claude/YALLA.md`; `npm test` is used here only as a generic default example.
+`$REPO` is the target repository, resolved from `repo:` in `.claude/YALLA.md`, or auto-detected with `gh repo view --json nameWithOwner -q .nameWithOwner`. `$BASE_BRANCH` is the branch new work is cut from and PRs target, resolved from `base_branch:` in `.claude/YALLA.md` (default `main`). `$TRACKING_MODE` comes from `tracking_mode:` and may be `github`, `linear`, `file-only`, or `db`. Build/test commands come from the `commands:` block in `.claude/YALLA.md`; `npm test` is used here only as a generic default example.
 
 > **Locating bundled files.** Reference files shown as `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/*.md` and `${CLAUDE_PLUGIN_ROOT}/agents/*.md` are the Yalla engine, bundled with this plugin — read them from there. (If Yalla was vendored into the repo with `install.sh`, those same files live under `.claude/knowledge/yalla/` and `.claude/agents/`.) `.claude/YALLA.md` is always your project's own config and lives in your repo, not the plugin.
 
@@ -43,10 +43,10 @@ If empty, ask "What are we building?" Do not proceed without a clear description
 
 ## Hard Rules
 
-- GitHub Issues are canonical for engineering work.
-- Canonical ID format is `issue-###`.
-- Do not invent a parallel ID scheme for new work; reference issues by `issue-###`.
-- If GitHub CLI is unavailable, halt and ask the user to run `gh auth login`. (An optional SQL task store is described in `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/SQL-TEMPLATES.md`; only use it if `.claude/YALLA.md` sets `tracking_mode: db`.)
+- The configured task store is canonical for engineering work.
+- Default canonical ID format is `issue-###`; Linear teams may use tracker IDs like `CAP-###`.
+- Do not invent a parallel ID scheme for new work; reference tasks by the configured tracker ID format.
+- If GitHub CLI is unavailable, halt only when GitHub is needed for the configured task mode or PR creation. For Linear, use Linear as the canonical issue store and GitHub for the branch/PR. For DB mode, use `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/SQL-TEMPLATES.md`; only use it if `.claude/YALLA.md` sets `tracking_mode: db`.
 - Every run must produce `.pipeline/outcome-evaluation.json` before shipping.
 - Every non-tiny run must start from `.pipeline/goal-contract.json` or an equivalent issue body section that names desired end state, success criteria, constraints, budget, forbidden shortcuts, and required evidence. Use `npm run yalla:run -- goal ...` when the cloned Yalla repo is available.
 - Every non-tiny run must append structured lifecycle entries to `.pipeline/events.jsonl` and write checkpoints after classify, plan, each meaningful work slice, test, review, and ship. Use `npm run yalla:run -- event ...` and `npm run yalla:run -- checkpoint ...` when the cloned Yalla repo is available.
@@ -100,7 +100,7 @@ Do not import `new-branch-and-pr`, `weekly-review`, `what-did-i-get-done`, `work
 
 ## Proof Contract
 
-A `/yalla` run is good only when the user-visible promise in the GitHub issue is proven by artifacts, not prose.
+A `/yalla` run is good only when the user-visible promise in the tracked issue is proven by artifacts, not prose.
 
 Required proof fields:
 
@@ -130,20 +130,23 @@ Run before Phase 0:
 
 ```bash
 gh auth status
+# only when tracking_mode is github
 gh issue list --repo "$REPO" --limit 1 >/dev/null
 ```
+
+For `tracking_mode: linear`, verify the Linear connector/CLI/API access configured by the host, then read the issue and workflow state mapping from `.claude/YALLA.md` `task_system:`. Do not mutate Linear during dry-run/report-only modes.
 
 Set local state fields to:
 
 ```json
 {
-  "tracking_mode": "github",
+  "tracking_mode": "$TRACKING_MODE",
   "github_available": true,
   "phase": "0-classify"
 }
 ```
 
-Do not fall back to file-only task IDs unless `.claude/YALLA.md` sets `tracking_mode: file-only`. File-only plans are otherwise allowed only after a real GitHub issue exists.
+Do not fall back to file-only task IDs unless `.claude/YALLA.md` sets `tracking_mode: file-only`. File-only plans are otherwise allowed only after a real tracked issue exists.
 
 ---
 
@@ -196,9 +199,23 @@ Do not silently downgrade a gate. If a required gate cannot run, record the bloc
 
 ## Phase 0: Track
 
+Choose the tracker from `.claude/YALLA.md`:
+
+- `github`: use the GitHub issue flow below.
+- `linear`: use the Linear issue ID (for example `CAP-123`) as canonical. Read title, description, comments, labels, state, priority, assignee, and links. Move to `task_system.in_progress_state` only after branch creation. Comment the plan-verification brief before implementation, attach the PR when opened, move to `task_system.review_state` when proof artifacts are ready, and move/comment `task_system.blocked_state` when evidence is `INCONCLUSIVE` or human input is needed.
+- `file-only`: use `.pipeline-state.json` and `plans/` without external mutation.
+- `db`: use `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/SQL-TEMPLATES.md`.
+
+Linear dry-run rule: read and report only. Do not change state, comments, labels, or links until the repo has explicitly opted into an assisted or unattended mode.
+
 ### Existing Issue
 
-If input matches `issue-###`:
+If input matches the configured issue format:
+
+- GitHub: `issue-###`
+- Linear: project key IDs like `CAP-123`
+
+For GitHub:
 
 ```bash
 ISSUE_NUMBER="###"
@@ -407,6 +424,16 @@ Plan structure:
 ### Intended Behavior
 - [Behavior, rule, promise, or boundary implementation must preserve]
 
+## Plan Verification Brief
+- User-visible promise: [one sentence]
+- Success invariant: [this is not successful until...]
+- Highest-risk assumption: [what could make this plan wrong]
+- Codebase evidence checked: [paths/docs/tests inspected]
+- Negative or false-success path: [what must not be accidentally marked successful]
+- Proof plan: [test/browser/API/static/manual evidence for each acceptance criterion]
+- Human review focus: [the 2-4 files/behaviors worth inspecting closely]
+- Tracker writeback: [GitHub/Linear comment/state update that will be made before implementation]
+
 ## Research Summary
 - Research artifact: [`plans/active/issue-###-[slug]-research.md` or `N/A` with reason]
 - Existing patterns checked: [paths]
@@ -459,6 +486,7 @@ Acceptance criteria:
 - email-delivery-check: [applies/N/A and why]
 - generated-artifact-check: [applies/N/A and why]
 - ui-journey-check: [applies/N/A and why]
+- browser-interaction-check: [applies/N/A and why]
 - architecture-docs-check: [applies/N/A and why]
 - doc-alignment-check: [applies/N/A and why]
 
@@ -851,8 +879,8 @@ Merge only if `.pipeline-state.json` has `merge_policy: "auto-merge-approved"` f
 
 ## Anti-Patterns
 
-- Inventing a parallel task-ID scheme instead of using `issue-###`.
-- Bypassing GitHub Issues as the canonical task store.
+- Inventing a parallel task-ID scheme instead of using the configured tracker ID format.
+- Bypassing the configured tracker as the canonical task store.
 - Planning without reading the codebase.
 - Letting research become months of planning instead of a short path to the next user-testable PR.
 - Shipping without tests/review.

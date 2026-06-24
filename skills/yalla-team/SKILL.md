@@ -1,13 +1,13 @@
 ---
 name: yalla-team
 description: >
-  Full autonomous coding team for complex changes. This is now a thin wrapper around /yalla with mandatory subagent use for planning, build/test separation, and review separation. Use only when the task is too broad or risky for a single-agent /yalla run. Uses GitHub Issues (`issue-###`) only.
-argument_hint: "[description of what to build, or issue-### to resume]"
+  Full autonomous coding team for complex changes. This is now a thin wrapper around /yalla with mandatory subagent use for planning, build/test separation, and review separation. Use only when the task is too broad or risky for a single-agent /yalla run. Uses the configured tracker (`issue-###`, `CAP-###`, etc.).
+argument_hint: "[description of what to build, or tracker issue ID to resume]"
 ---
 
 # /yalla-team
 
-Use `/yalla-team` when a complex change benefits from multiple independent agents. It follows the same GitHub Issue protocol, artifact policy, merge policy, and review gates as `/yalla`.
+Use `/yalla-team` when a complex change benefits from multiple independent agents. It follows the same configured tracker protocol, artifact policy, merge policy, and review gates as `/yalla`.
 
 Default shipping policy: create a PR only. Do not merge unless the user explicitly approved auto-merge in this run.
 
@@ -17,9 +17,9 @@ The orchestrator role and exact subagent prompts live in `${CLAUDE_PLUGIN_ROOT}/
 
 ## Hard Rules
 
-- Canonical ID format is `issue-###`.
-- Do not invent a parallel ID scheme for new work; reference issues by `issue-###`.
-- GitHub Issues are the canonical task store. (An optional SQL task store is described in `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/SQL-TEMPLATES.md`; only use it if `.claude/YALLA.md` sets `tracking_mode: db`.)
+- Default canonical ID format is `issue-###`; Linear teams may use tracker IDs like `CAP-###`.
+- Do not invent a parallel ID scheme for new work; reference tasks by the configured tracker ID format.
+- The configured tracker is the canonical task store. GitHub Issues are the default; Linear is allowed when `.claude/YALLA.md` sets `tracking_mode: linear`; DB mode is described in `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/SQL-TEMPLATES.md`.
 - Creator != reviewer: the context that writes code does not do final review.
 
 ## Flow
@@ -49,7 +49,7 @@ The orchestrator role and exact subagent prompts live in `${CLAUDE_PLUGIN_ROOT}/
 
 ## Anti-Patterns
 
-- Inventing a parallel task-ID scheme instead of `issue-###`.
+- Inventing a parallel task-ID scheme instead of the configured tracker ID.
 - Creating `session/task-*` branches.
 - Running a full team for tiny changes.
 - Letting subagents produce long raw research dumps instead of concise findings.

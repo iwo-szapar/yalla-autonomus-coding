@@ -66,6 +66,28 @@
           "coverage_gaps": []
         },
         {
+          "category": "browser-interactions",
+          "description": "Browser interaction regression tests.",
+          "deterministic_seam_available": true,
+          "proof_mode": "playwright",
+          "verdict": "PROVEN",
+          "verification_strength": "strong",
+          "commands": ["npm run test:e2e"],
+          "existing_tests": ["tests/playwright/editor-save-caret.spec.ts"],
+          "coverage_gaps": []
+        },
+        {
+          "category": "task-tracking",
+          "description": "Task tracker adapter tests.",
+          "deterministic_seam_available": true,
+          "proof_mode": "existing-test",
+          "verdict": "PROVEN",
+          "verification_strength": "strong",
+          "commands": ["npm run test -- tests/scripts"],
+          "existing_tests": ["tests/scripts/linear-tracking-adapter.test.ts"],
+          "coverage_gaps": []
+        },
+        {
           "category": "schema-migration",
           "description": "Migration tests.",
           "deterministic_seam_available": true,

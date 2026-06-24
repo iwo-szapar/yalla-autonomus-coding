@@ -233,6 +233,16 @@ Run for medium/high-risk or broad diffs, not every tiny fix.
 - Browser autofill leaves valid fields unread by submit logic
 - Changed UI is not readable/usable around a small mobile width
 
+## browser-interaction-check
+
+> "Does browser evidence prove the interaction invariant a human would otherwise test manually, including typing, caret/focus stability, save-state transitions, navigation, reload, console, and network behavior?"
+
+**Fail criteria:**
+- A manual repro involving typing, autosave, navigation, reload, focus, or caret behavior is marked proven without browser-level evidence
+- The test only renders a component or mocks internal state, so it cannot observe the reported regression
+- The browser proof ignores console errors, failed network requests, or save-state transitions that are part of the user-visible failure
+- Persisted text/state is not checked after navigation away/back or reload when durability is part of the claim
+
 ## operator-understanding-check
 
 > "Does this PR include the operator-readable summary required by its understanding depth, explaining problem, solution, tradeoff, impact, risks, and verification without requiring the operator/maintainer to read code?"

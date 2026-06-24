@@ -64,9 +64,10 @@ Open `.claude/YALLA.md` and fill these sections in this order:
 - `commands.test` - exact test command. Do not guess. If this is wrong, most runs become `INCONCLUSIVE`.
 - `commands.typecheck`, `commands.build`, `commands.lint` - exact commands or `""`.
 - `models` - optional phase-level routing hints. Valid keys are `classify`, `plan`, `implement`, `test`, `review`, and `summarize`.
-- `verifiers` - optional proof commands or artifact paths. Common keys are `api`, `ui`, `perf`, `docs`, `visual`, and `benchmark`.
+- `verifiers` - optional proof commands or artifact paths. Common keys are `api`, `ui`, `browser_interactions`, `perf`, `docs`, `visual`, and `benchmark`.
 - `test_dir`, `test_file_glob`, `test_setup_file` - match existing conventions.
-- `tracking_mode` - use `github` unless you intentionally need `file-only` or `db`.
+- `tracking_mode` - use `github`, `linear`, `file-only`, or `db`. Use `linear` when Linear is already the canonical sprint board.
+- `task_system` - map GitHub labels or Linear workflow states for ready/in-progress/review/blocked/done.
 - `domains` - map your team's words to subsystems. Use words that appear in issue titles.
 - `gotchas` - specific rules that prevent known mistakes.
 - `risk_gates` - only gates that match real subsystems.
@@ -98,6 +99,7 @@ models:
 verifiers:
   api: "npm test"
   ui: "npm run test:e2e"
+  browser_interactions: "npm run test:e2e -- --grep @browser-interaction"
   visual: ".pipeline/visual-evidence/"
 
 test_dir: tests/
@@ -106,6 +108,24 @@ test_setup_file: ""
 
 tracking_mode: github
 issue_id_format: "issue-###"
+
+task_system:
+  provider: github
+  ready_label: yalla-ready
+  block_labels: [blocked, needs-human, do-not-autopilot]
+  priority_labels: [p0, p1, p2]
+
+# Linear variant:
+# tracking_mode: linear
+# issue_id_format: "CAP-###"
+# task_system:
+#   provider: linear
+#   team: CAP
+#   ready_states: [Ready, Selected]
+#   in_progress_state: "In Progress"
+#   review_state: "In Review"
+#   blocked_state: "Needs Human"
+#   done_state: Done
 
 domains:
   - keywords: [auth, login, oauth, session]

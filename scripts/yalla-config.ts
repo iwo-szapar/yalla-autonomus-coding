@@ -11,10 +11,18 @@ export type YallaConfig = {
   models: Record<string, string>
   verifiers: Record<string, string>
   taskSystem: {
+    provider?: string
     readyLabel?: string
     blockLabels: string[]
     priorityLabels: string[]
     riskLabels: string[]
+    readyStates: string[]
+    inProgressState?: string
+    reviewState?: string
+    blockedState?: string
+    doneState?: string
+    team?: string
+    project?: string
     issueTemplate?: string
   }
   autopilot: {
@@ -65,6 +73,7 @@ const DEFAULT_CONFIG: YallaConfig = {
     blockLabels: [],
     priorityLabels: [],
     riskLabels: [],
+    readyStates: [],
   },
   autopilot: {
     eligibleLabels: [],
@@ -104,7 +113,7 @@ function cloneDefaultConfig(): YallaConfig {
     commands: {},
     models: {},
     verifiers: {},
-    taskSystem: { blockLabels: [], priorityLabels: [], riskLabels: [] },
+    taskSystem: { blockLabels: [], priorityLabels: [], riskLabels: [], readyStates: [] },
     autopilot: { eligibleLabels: [], blockLabels: [] },
     evals: {},
     ceremony: {},
@@ -194,10 +203,18 @@ function applyNested(config: YallaConfig, parent: string, key: string, rawValue:
 }
 
 function applyTaskSystem(config: YallaConfig, key: string, value: unknown) {
-  if (key === 'ready_label') config.taskSystem.readyLabel = stringValue(value)
+  if (key === 'provider') config.taskSystem.provider = stringValue(value)
+  else if (key === 'ready_label') config.taskSystem.readyLabel = stringValue(value)
   else if (key === 'block_labels') config.taskSystem.blockLabels = arrayValue(value)
   else if (key === 'priority_labels') config.taskSystem.priorityLabels = arrayValue(value)
   else if (key === 'risk_labels') config.taskSystem.riskLabels = arrayValue(value)
+  else if (key === 'ready_states') config.taskSystem.readyStates = arrayValue(value)
+  else if (key === 'in_progress_state') config.taskSystem.inProgressState = stringValue(value)
+  else if (key === 'review_state') config.taskSystem.reviewState = stringValue(value)
+  else if (key === 'blocked_state') config.taskSystem.blockedState = stringValue(value)
+  else if (key === 'done_state') config.taskSystem.doneState = stringValue(value)
+  else if (key === 'team') config.taskSystem.team = stringValue(value)
+  else if (key === 'project') config.taskSystem.project = stringValue(value)
   else if (key === 'issue_template') config.taskSystem.issueTemplate = stringValue(value)
 }
 
