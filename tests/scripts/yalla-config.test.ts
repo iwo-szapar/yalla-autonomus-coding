@@ -1,9 +1,13 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { inferConfigRoot, loadYallaConfig, parseYallaConfig } from '../../scripts/yalla-config.js'
+
+const require = createRequire(import.meta.url)
+const { isDeactivationCommand, normalizeMode } = require('../../hooks/yalla-config.cjs')
 
 function tempRoot() {
   return mkdtempSync(join(tmpdir(), 'yalla-config-'))
@@ -14,6 +18,13 @@ afterEach(() => {
 })
 
 describe('scripts/yalla-config.ts', () => {
+  it('normalizes user-facing mode aliases', () => {
+    expect(normalizeMode('normal')).toBe('off')
+    expect(normalizeMode('default')).toBe('standard')
+    expect(isDeactivationCommand('normal mode.')).toBe(true)
+    expect(isDeactivationCommand('stop yalla')).toBe(true)
+  })
+
   it('parses documented config sections used by onboarding and autopilot', () => {
     const config = parseYallaConfig(`
 repo: "example/repo"

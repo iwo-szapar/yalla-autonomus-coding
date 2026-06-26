@@ -162,6 +162,7 @@ Yalla also ships compact adapters modeled after the same single-source rule file
 - OpenCode: `.opencode/plugins/yalla.mjs` injects `hooks/yalla-instructions.cjs` each turn and supports `/yalla lean|standard|strict|off` mode persistence. Copy the plugin plus `hooks/yalla-*.cjs` together.
 - Gemini CLI: `gemini-extension.json` points at `AGENTS.md`.
 - Cursor, Windsurf, Cline, Copilot, Kiro: copy the matching rule file from this repo.
+- MCP-only hosts: `yalla-mcp/` exposes the compact instruction builder as a prompt/tool server without extra runtime dependencies.
 
 See [`docs/agent-portability.md`](docs/agent-portability.md). Run `npm run rules:check` before releasing adapter changes.
 
@@ -222,6 +223,7 @@ That's the whole adaptation. No code changes. See [`CUSTOMIZING.md`](CUSTOMIZING
 /yalla-review                   binary pass/fail review of the current diff
 /yalla-simplify                 deletion-only over-engineering review of the current diff
 /yalla-simplify-audit           repo-wide bloat audit
+/yalla-debt                     list yalla-min/minimum-diff shortcut markers
 /yalla-audit <issue-### | PR#>  post-mortem on a completed run
 /yalla issue-123                resume an interrupted run
 ```
@@ -253,6 +255,7 @@ Requires the [GitHub CLI](https://cli.github.com) (`gh auth login`) for default 
 - **Agents** (`agents/`) — the specialists: lead (orchestrator), implementer, tester, reviewer.
 - **Knowledge** (`knowledge/yalla/`) — pipeline mechanics (classification, diagnosis, vertical slices, test seams, artifacts, agent brief, preflight) plus the customizable check definitions in `REVIEW-CHECKS.md` and `PROJECT-CHECKS.md`.
 - **Eval harness** (`eval/yalla/`) — the runnable proof-contract / test-inventory / outcome-quality suites and their fixtures. Repo-root only.
+- **Benchmarks** (`benchmarks/yalla/`) — methodology for agentic baseline-vs-Yalla measurement.
 - **Onboarding docs** (`docs/onboarding/`) — what each repo needs: config, labels, issue shape, project checks, and eval fixtures.
 - **Autopilot docs** (`docs/autopilot/`) — staged scheduler/readiness guidance for moving from local dry-run to PR-only automation.
 

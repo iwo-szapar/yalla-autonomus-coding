@@ -41,6 +41,8 @@ One line per finding:
 
 `path:Lx-Ly: <tag> <what to cut>. <replacement>.`
 
+Keep findings terse and mechanical. Do not include review prose, design commentary, or maybe-language. Rank the highest-confidence deletion first. If a finding cannot name what replaces the code, drop it.
+
 End with:
 
 `net: -<N> lines, -<M> deps possible.`

@@ -26,3 +26,5 @@ npm run eval:yalla:smoke
 ```
 
 Future replay harnesses should compare at least three arms: raw agent, Yalla standard, and Yalla lean. Use the same issue text and seed fixtures across arms, and count only `PROVEN` as success.
+
+See [`agentic-methodology.md`](agentic-methodology.md) for the baseline-vs-Yalla replay design, isolation rules, and safety/completeness scoring.
