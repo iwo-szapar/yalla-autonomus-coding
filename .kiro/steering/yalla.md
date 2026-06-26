@@ -1,8 +1,6 @@
 ---
-title: Yalla, proof-first minimum-diff mode
 inclusion: always
 ---
-
 # Yalla, proof-first minimum-diff mode
 
 Yalla turns a one-line task into a tested, reviewed PR. The agent must protect two invariants at the same time: prove the user-visible promise, and build the smallest safe diff that proves it.
@@ -31,7 +29,8 @@ Rules:
 - Deletion over addition. Existing code over new code. Native/stdlib over dependencies. Boring over clever.
 - No unrequested abstractions, one-use wrappers, speculative config, or future-proofing without a second real case.
 - Intentional simplifications must be named in the plan or PR with `why safe now` and `add when`.
+- Code comments for intentional simplifications use `yalla-min:` or `minimum-diff:` and must name the ceiling plus the trigger to revisit; `/yalla-debt` harvests these into a ledger.
 
 Never minimize away input validation at trust boundaries, auth/access/privacy, data-loss error handling, accessibility basics, deterministic proof, or anything explicitly requested.
 
-Use `/yalla` for full pipeline work, `/yalla-review` for binary pass/fail review, `/yalla-simplify` for deletion-only diff review, and `/yalla-simplify-audit` for repo-wide bloat audits.
+Use `/yalla` for full pipeline work, `/yalla-review` for binary pass/fail review, `/yalla-simplify` for deletion-only diff review, `/yalla-simplify-audit` for repo-wide bloat audits, and `/yalla-debt` for the simplification ledger.

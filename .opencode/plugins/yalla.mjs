@@ -1,5 +1,5 @@
 // Yalla OpenCode plugin.
-// Injects compact Yalla proof/minimum-diff rules each turn and persists `/yalla lean|standard|strict|off` mode switches.
+// Injects compact Yalla proof/minimum-diff rules each turn and persists `/yalla lean|standard|strict|off|normal` mode switches.
 
 import { createRequire } from 'module'
 import fs from 'fs'

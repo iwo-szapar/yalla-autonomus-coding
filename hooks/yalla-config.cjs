@@ -4,11 +4,21 @@ const path = require('path')
 
 const DEFAULT_MODE = 'standard'
 const VALID_MODES = ['off', 'lean', 'standard', 'strict']
+const MODE_ALIASES = {
+  normal: 'off',
+  default: 'standard',
+}
 
 function normalizeMode(mode) {
   if (typeof mode !== 'string') return null
   const normalized = mode.trim().toLowerCase()
-  return VALID_MODES.includes(normalized) ? normalized : null
+  const aliased = MODE_ALIASES[normalized] || normalized
+  return VALID_MODES.includes(aliased) ? aliased : null
+}
+
+function isDeactivationCommand(text) {
+  const normalized = String(text || '').trim().toLowerCase().replace(/[.!?\s]+$/, '')
+  return normalized === 'stop yalla' || normalized === 'normal mode' || normalized === '/yalla off' || normalized === '/yalla normal'
 }
 
 function getConfigDir() {
@@ -50,6 +60,7 @@ module.exports = {
   getConfigDir,
   getConfigPath,
   getDefaultMode,
+  isDeactivationCommand,
   normalizeMode,
   writeDefaultMode,
 }
