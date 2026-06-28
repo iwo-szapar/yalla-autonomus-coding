@@ -1,0 +1,84 @@
+{
+  "defaultProvider": "crabbox",
+  "workspacePath": "/workspace/yalla-autonomus-coding",
+  "providers": {
+    "crabbox": {
+      "provider": "hetzner",
+      "slugPrefix": "yalla",
+      "ttl": "90m",
+      "idleTimeout": "30m",
+      "bootstrapCommands": [
+        "npm ci"
+      ],
+      "setupCommands": [
+        "bash scripts/agent-sandbox/setup-local-supabase.sh"
+      ],
+      "allowEnv": [
+        "NODE_ENV",
+        "CI",
+        "BASE_URL",
+        "APP_URL",
+        "VITE_APP_URL"
+      ]
+    }
+  },
+  "sync": {
+    "exclude": [
+      "node_modules/",
+      ".git/",
+      "dist/",
+      ".vercel/",
+      ".pipeline/",
+      "test-results/",
+      "playwright-report/",
+      "coverage/",
+      ".env*",
+      "scripts/profiles/*.json",
+      "tests/playwright/.auth/"
+    ]
+  },
+  "envAllowlist": [
+    "NODE_ENV",
+    "CI",
+    "BASE_URL",
+    "APP_URL",
+    "VITE_APP_URL"
+  ],
+  "profiles": {
+    "fast": {
+      "commands": [
+        "npm run typecheck",
+        "npm test",
+        "npm run eval:yalla:smoke"
+      ]
+    },
+    "mcp": {
+      "commands": [
+        "npx vitest run tests/scripts/yalla-mcp.test.ts --reporter=dot",
+        "npm run eval:yalla:test-inventory"
+      ]
+    },
+    "schema": {
+      "commands": [
+        "npm run eval:yalla:sandbox-proof"
+      ]
+    },
+    "ui-smoke": {
+      "commands": [
+        "npm run test:e2e"
+      ]
+    },
+    "money": {
+      "commands": [
+        "npm run eval:yalla:sandbox-proof",
+        "npm test"
+      ]
+    },
+    "delivery": {
+      "commands": [
+        "npm run eval:yalla:sandbox-proof",
+        "npm test"
+      ]
+    }
+  }
+}

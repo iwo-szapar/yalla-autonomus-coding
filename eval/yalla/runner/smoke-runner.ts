@@ -3,6 +3,7 @@ import { runMinimumDiffFixtures } from './minimum-diff-runner.js'
 import { runOutcomeQuality } from './outcome-quality.js'
 import { runPlanReviewCoverageFixtures } from './plan-review-coverage-runner.js'
 import { runProofContractFixtures } from './proof-contract-runner.js'
+import { runSandboxProofFixtures } from './sandbox-proof-runner.js'
 import { runTestInventoryFixtures } from './test-inventory-runner.js'
 
 export function runYallaSmoke() {
@@ -11,7 +12,9 @@ export function runYallaSmoke() {
   const minimumDiff = runMinimumDiffFixtures()
   const planReviewCoverage = runPlanReviewCoverageFixtures()
   const outcomeQuality = runOutcomeQuality()
-  const passed = proofContract.passed && testInventory.passed && minimumDiff.passed && planReviewCoverage.passed && outcomeQuality.passed
+  const sandboxProof = runSandboxProofFixtures()
+  const passed =
+    proofContract.passed && testInventory.passed && minimumDiff.passed && planReviewCoverage.passed && outcomeQuality.passed && sandboxProof.passed
 
   return {
     passed,
@@ -20,6 +23,7 @@ export function runYallaSmoke() {
     minimum_diff: minimumDiff.summary,
     plan_review_coverage: planReviewCoverage.summary,
     outcome_quality: outcomeQuality.summary,
+    sandbox_proof: sandboxProof.summary,
   }
 }
 
