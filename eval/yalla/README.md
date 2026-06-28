@@ -30,7 +30,10 @@ npm run eval:yalla:review-quality
 npm run eval:yalla:test-coverage
 npm run eval:yalla:plan-review-coverage
 npm run eval:yalla:outcome-quality
+npm run eval:yalla:sandbox-proof
 npm run eval:yalla:smoke
+npm run agent:sandbox -- doctor --provider local
+npm run agent:sandbox -- verify --provider local --profile auto --issue issue-1234
 npm run yalla:autopilot -- run --issue issue-### --mode dry-run
 npm run yalla:autopilot -- queue --mode dry-run
 npm run yalla:benchmark
@@ -69,6 +72,12 @@ The outcome-quality command validates the PRD 04 proving-ground runs:
 - Five unique real GitHub issues and PRs are required.
 - Completed PRs are scored from issue intent, plan, acceptance trace, test evidence, review results, PR checks, and optional browser evidence.
 - `PROVEN` is the only success verdict. `NOT_PROVEN`, `INCONCLUSIVE`, missing PR checks, failed commands, and failed review checks fail the gate.
+
+The sandbox-proof command validates isolated agent proof manifests. It rejects
+high-risk `PROVEN` outcomes without remote sandbox proof, rejects
+`shared-staging` as DB isolation for schema/money/delivery profiles, rejects
+missing teardown and likely secret leakage, and accepts valid local `fast` and
+remote isolated-DB proof records.
 
 The smoke command runs all eval suites and fails if any suite fails.
 

@@ -1,0 +1,19 @@
+# Secrets and local environment
+.env
+.env.*
+*.pem
+*.key
+
+# Generated output and caches
+node_modules/
+dist/
+.vercel/
+.pipeline/
+test-results/
+playwright-report/
+coverage/
+tmp/
+
+# Local-only fixtures and browser auth state
+scripts/profiles/*.json
+tests/playwright/.auth/

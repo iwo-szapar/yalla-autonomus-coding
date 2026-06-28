@@ -1,0 +1,94 @@
+name: Agent Sandbox Contract
+
+on:
+  workflow_dispatch:
+    inputs:
+      crabbox_provider:
+        description: "Crabbox provider to use"
+        required: true
+        default: "hetzner"
+      profile:
+        description: "Verification profile"
+        required: true
+        type: choice
+        default: "fast"
+        options:
+          - fast
+          - schema
+          - mcp
+          - ui-smoke
+          - money
+          - delivery
+
+concurrency:
+  group: agent-sandbox-contract-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  crabbox-canary:
+    name: Crabbox manual canary
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      CRABBOX_COORDINATOR_URL: ${{ secrets.CRABBOX_COORDINATOR_URL }}
+      CRABBOX_COORDINATOR_TOKEN: ${{ secrets.CRABBOX_COORDINATOR_TOKEN }}
+      HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+      HETZNER_TOKEN: ${{ secrets.HETZNER_TOKEN }}
+      AGENT_SANDBOX_CRABBOX_PROVIDER: ${{ inputs.crabbox_provider }}
+      NODE_ENV: test
+      CI: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Crabbox
+        run: |
+          brew install openclaw/tap/crabbox
+          crabbox --version
+
+      - name: Authenticate Crabbox
+        run: |
+          if [ -n "${CRABBOX_COORDINATOR_URL:-}" ] && [ -n "${CRABBOX_COORDINATOR_TOKEN:-}" ]; then
+            printf '%s' "$CRABBOX_COORDINATOR_TOKEN" | crabbox login \
+              --url "$CRABBOX_COORDINATOR_URL" \
+              --provider "$AGENT_SANDBOX_CRABBOX_PROVIDER" \
+              --token-stdin
+          elif [ -n "${HCLOUD_TOKEN:-}" ] || [ -n "${HETZNER_TOKEN:-}" ]; then
+            echo "Using direct ${AGENT_SANDBOX_CRABBOX_PROVIDER} provider token from GitHub secrets."
+          else
+            echo "Set either CRABBOX_COORDINATOR_URL + CRABBOX_COORDINATOR_TOKEN, or HCLOUD_TOKEN/HETZNER_TOKEN for direct Hetzner canaries."
+            exit 1
+          fi
+
+      - name: Local harness doctor
+        run: npm run agent:sandbox -- doctor --provider local
+
+      - name: Crabbox provider doctor
+        run: npm run agent:sandbox -- doctor --provider crabbox --provider-check
+
+      - name: Crabbox proof canary
+        run: npm run agent:sandbox -- verify --provider crabbox --profile "${{ inputs.profile }}" --issue issue-0000
+
+      - name: Upload sandbox proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-sandbox-proof
+          path: |
+            .pipeline/agent-sandbox-proof.json
+            .pipeline/agent-sandbox-artifacts/
+          if-no-files-found: ignore

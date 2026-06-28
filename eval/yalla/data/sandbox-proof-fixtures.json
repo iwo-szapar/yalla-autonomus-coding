@@ -1,0 +1,316 @@
+[
+  {
+    "id": "high_risk_no_sandbox_proof",
+    "expected_valid": false,
+    "proof": {
+      "schema_version": 1,
+      "issue_id": "issue-100",
+      "profile": "money",
+      "provider": "local",
+      "sandbox_id": "local-abc",
+      "started_at": "2026-06-25T12:00:00.000Z",
+      "completed_at": "2026-06-25T12:01:00.000Z",
+      "git": {
+        "base_sha": "abc123",
+        "dirty_diff_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "changed_files": ["src/checkout.ts"]
+      },
+      "isolation": {
+        "workspace": "clean-copy",
+        "app_server": "not-required",
+        "database": "not-required",
+        "network": "provider-default"
+      },
+      "commands": [
+        {
+          "command": "npm test",
+          "status": "pass",
+          "exit_code": 0,
+          "duration_ms": 1000,
+          "stdout_ref": ".pipeline/agent-sandbox-artifacts/run/stdout.log",
+          "stderr_ref": ".pipeline/agent-sandbox-artifacts/run/stderr.log"
+        }
+      ],
+      "artifacts": [],
+      "redaction": {
+        "status": "pass",
+        "patterns_checked": ["token", "secret"]
+      },
+      "teardown": {
+        "status": "pass",
+        "completed_at": "2026-06-25T12:01:05.000Z"
+      },
+      "verdict": "PROVEN"
+    }
+  },
+  {
+    "id": "schema_shared_staging_claimed_proven",
+    "expected_valid": false,
+    "proof": {
+      "schema_version": 1,
+      "issue_id": "issue-101",
+      "profile": "schema",
+      "provider": "crabbox:hetzner",
+      "sandbox_id": "yalla-issue-101",
+      "started_at": "2026-06-25T12:00:00.000Z",
+      "completed_at": "2026-06-25T12:01:00.000Z",
+      "git": {
+        "base_sha": "abc123",
+        "dirty_diff_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "changed_files": ["migrations/001.sql"]
+      },
+      "isolation": {
+        "workspace": "remote-clean-copy",
+        "app_server": "not-required",
+        "database": "shared-staging",
+        "network": "provider-default"
+      },
+      "commands": [
+        {
+          "command": "npm run migrate:dry",
+          "status": "pass",
+          "exit_code": 0,
+          "duration_ms": 1000,
+          "stdout_ref": ".pipeline/agent-sandbox-artifacts/run/stdout.log",
+          "stderr_ref": ".pipeline/agent-sandbox-artifacts/run/stderr.log"
+        }
+      ],
+      "artifacts": [],
+      "redaction": {
+        "status": "pass",
+        "patterns_checked": ["token", "secret"]
+      },
+      "teardown": {
+        "status": "pass",
+        "completed_at": "2026-06-25T12:01:05.000Z"
+      },
+      "verdict": "PROVEN"
+    }
+  },
+  {
+    "id": "missing_teardown",
+    "expected_valid": false,
+    "proof": {
+      "schema_version": 1,
+      "issue_id": "issue-102",
+      "profile": "fast",
+      "provider": "local",
+      "sandbox_id": "local-abc",
+      "started_at": "2026-06-25T12:00:00.000Z",
+      "completed_at": "2026-06-25T12:01:00.000Z",
+      "git": {
+        "base_sha": "abc123",
+        "dirty_diff_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "changed_files": ["README.md"]
+      },
+      "isolation": {
+        "workspace": "clean-copy",
+        "app_server": "not-required",
+        "database": "not-required",
+        "network": "provider-default"
+      },
+      "commands": [
+        {
+          "command": "npm test",
+          "status": "pass",
+          "exit_code": 0,
+          "duration_ms": 1000,
+          "stdout_ref": ".pipeline/agent-sandbox-artifacts/run/stdout.log",
+          "stderr_ref": ".pipeline/agent-sandbox-artifacts/run/stderr.log"
+        }
+      ],
+      "artifacts": [],
+      "redaction": {
+        "status": "pass",
+        "patterns_checked": ["token", "secret"]
+      },
+      "teardown": {
+        "status": "fail",
+        "completed_at": "2026-06-25T12:01:05.000Z"
+      },
+      "verdict": "PROVEN"
+    }
+  },
+  {
+    "id": "secret_in_artifact_log",
+    "expected_valid": false,
+    "proof": {
+      "schema_version": 1,
+      "issue_id": "issue-103",
+      "profile": "fast",
+      "provider": "local",
+      "sandbox_id": "local-abc",
+      "started_at": "2026-06-25T12:00:00.000Z",
+      "completed_at": "2026-06-25T12:01:00.000Z",
+      "git": {
+        "base_sha": "abc123",
+        "dirty_diff_sha256": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "changed_files": ["README.md"]
+      },
+      "isolation": {
+        "workspace": "clean-copy",
+        "app_server": "not-required",
+        "database": "not-required",
+        "network": "provider-default"
+      },
+      "commands": [
+        {
+          "command": "npm test",
+          "status": "pass",
+          "exit_code": 0,
+          "duration_ms": 1000,
+          "stdout_ref": ".pipeline/agent-sandbox-artifacts/run/stdout.log",
+          "stderr_ref": ".pipeline/agent-sandbox-artifacts/run/stderr.log"
+        }
+      ],
+      "artifacts": [
+        {
+          "kind": "log",
+          "path": ".pipeline/agent-sandbox-artifacts/run/sk_test_realLookingTokenValue123456.log",
+          "sha256": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        }
+      ],
+      "redaction": {
+        "status": "pass",
+        "patterns_checked": ["token", "secret"]
+      },
+      "teardown": {
+        "status": "pass",
+        "completed_at": "2026-06-25T12:01:05.000Z"
+      },
+      "verdict": "PROVEN"
+    }
+  },
+  {
+    "id": "valid_fast_local_proof",
+    "expected_valid": true,
+    "proof": {
+      "schema_version": 1,
+      "issue_id": "issue-104",
+      "profile": "fast",
+      "provider": "local",
+      "sandbox_id": "local-abc",
+      "started_at": "2026-06-25T12:00:00.000Z",
+      "completed_at": "2026-06-25T12:01:00.000Z",
+      "git": {
+        "base_sha": "abc123",
+        "dirty_diff_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "changed_files": ["README.md"]
+      },
+      "isolation": {
+        "workspace": "clean-copy",
+        "app_server": "not-required",
+        "database": "not-required",
+        "network": "provider-default"
+      },
+      "commands": [
+        {
+          "command": "npm test",
+          "status": "pass",
+          "exit_code": 0,
+          "duration_ms": 1000,
+          "stdout_ref": ".pipeline/agent-sandbox-artifacts/run/stdout.log",
+          "stderr_ref": ".pipeline/agent-sandbox-artifacts/run/stderr.log"
+        }
+      ],
+      "artifacts": [],
+      "redaction": {
+        "status": "pass",
+        "patterns_checked": ["token", "secret"]
+      },
+      "teardown": {
+        "status": "pass",
+        "completed_at": "2026-06-25T12:01:05.000Z"
+      },
+      "verdict": "PROVEN"
+    }
+  },
+  {
+    "id": "valid_schema_isolated_db_proof",
+    "expected_valid": true,
+    "proof": {
+      "schema_version": 1,
+      "issue_id": "issue-105",
+      "profile": "schema",
+      "provider": "crabbox:hetzner",
+      "sandbox_id": "yalla-issue-105",
+      "started_at": "2026-06-25T12:00:00.000Z",
+      "completed_at": "2026-06-25T12:01:00.000Z",
+      "git": {
+        "base_sha": "abc123",
+        "dirty_diff_sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "changed_files": ["migrations/001.sql"]
+      },
+      "isolation": {
+        "workspace": "remote-clean-copy",
+        "app_server": "not-required",
+        "database": "local-supabase",
+        "network": "provider-default"
+      },
+      "commands": [
+        {
+          "command": "npm run migrate:dry",
+          "status": "pass",
+          "exit_code": 0,
+          "duration_ms": 1000,
+          "stdout_ref": ".pipeline/agent-sandbox-artifacts/run/stdout.log",
+          "stderr_ref": ".pipeline/agent-sandbox-artifacts/run/stderr.log"
+        }
+      ],
+      "artifacts": [],
+      "redaction": {
+        "status": "pass",
+        "patterns_checked": ["token", "secret"]
+      },
+      "teardown": {
+        "status": "pass",
+        "completed_at": "2026-06-25T12:01:05.000Z"
+      },
+      "verdict": "PROVEN"
+    }
+  },
+  {
+    "id": "provider_unavailable_marked_inconclusive",
+    "expected_valid": true,
+    "proof": {
+      "schema_version": 1,
+      "issue_id": "issue-106",
+      "profile": "fast",
+      "provider": "crabbox:hetzner",
+      "sandbox_id": "yalla-issue-106",
+      "started_at": "2026-06-25T12:00:00.000Z",
+      "completed_at": "2026-06-25T12:01:00.000Z",
+      "git": {
+        "base_sha": "abc123",
+        "dirty_diff_sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "changed_files": ["README.md"]
+      },
+      "isolation": {
+        "workspace": "remote-clean-copy",
+        "app_server": "not-required",
+        "database": "not-required",
+        "network": "provider-default"
+      },
+      "commands": [
+        {
+          "command": "crabbox doctor --provider hetzner",
+          "status": "fail",
+          "exit_code": 1,
+          "duration_ms": 1000,
+          "stdout_ref": ".pipeline/agent-sandbox-artifacts/run/stdout.log",
+          "stderr_ref": ".pipeline/agent-sandbox-artifacts/run/stderr.log"
+        }
+      ],
+      "artifacts": [],
+      "redaction": {
+        "status": "pass",
+        "patterns_checked": ["token", "secret"]
+      },
+      "teardown": {
+        "status": "pass",
+        "completed_at": "2026-06-25T12:01:05.000Z"
+      },
+      "verdict": "INCONCLUSIVE"
+    }
+  }
+]
