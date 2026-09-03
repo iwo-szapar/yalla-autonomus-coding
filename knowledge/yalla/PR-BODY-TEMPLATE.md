@@ -44,6 +44,12 @@ gh pr create --base "$BASE_BRANCH" --title "[issue-###] [description]" --body "$
 - [commands, screenshots, traces, transcripts, or accepted gaps]
 - [CI status from gh pr checks when available]
 
+## Evidence Gates
+- External grounding: [sources + implementation consequence, or N/A with reason]
+- Proof boundaries: [criterion -> seam + false-success condition, or N/A with reason]
+- Runtime E2E: [environment/base/guardrails/proves/does-not-prove, or N/A with reason]
+- Generative gates: [surface parity / trust map / volume envelope / lifecycle states / UI proof — Pass or N/A with reason]
+
 ## Documentation Impact
 - [docs updated, or credible no-impact reason]
 
@@ -66,6 +72,9 @@ Decision needed from the operator/maintainer:
 - [x] reviewability-check: Pass
 - [x] intended-vs-implemented-check: Pass [or N/A with reason]
 - [x] operator-understanding-check: Pass [or N/A for light-mode trivial changes]
+- [x] external-grounding-check: Pass [or N/A with reason]
+- [x] runtime-e2e-proof-check: Pass [or N/A with reason]
+- [x] surface-parity/trust-map/volume-envelope/lifecycle-state/ui-proof: [Pass or N/A with reason]
 - [x] risk-triggered checks: [list triggered checks + Pass, or N/A with reason]
 
 ## Artifacts

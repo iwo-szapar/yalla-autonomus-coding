@@ -84,6 +84,8 @@ Write to `plans/active/issue-###-[slug].md`, plus `plans/active/issue-###.plan.j
 - Risk tier: [low|medium|high]
 - Evidence mode: [minimal|standard|strict]
 - Product intent gate: [applies|n/a and why]
+- External grounding gate: [applies|n/a and concrete trigger]
+- Runtime E2E gate: [applies|n/a and concrete trigger]
 
 ## Domain Language
 - [Canonical project terms from your conventions doc (CLAUDE.md / AGENTS.md), .claude/YALLA.md, docs]
@@ -108,6 +110,15 @@ Write to `plans/active/issue-###-[slug].md`, plus `plans/active/issue-###.plan.j
 
 ## Interfaces and Test Seams
 - [Public interface] — [invariants/error modes] — [highest correct test seam]
+
+## Evidence Gates
+- External grounding: [official/upstream source + claim, or concrete N/A reason]
+- Runtime E2E preflight: [environment, base revision, guardrails, proves/does-not-prove, or concrete N/A reason]
+- Surface parity: [two nearest siblings + inherited concerns, or concrete N/A reason]
+- Trust map: [input writers/neutralization + output consumers/guards, or concrete N/A reason]
+- Volume envelope: [busiest case, cost math, bound, or concrete N/A reason]
+- Lifecycle states: [object states, behavior, negative test, or concrete N/A reason]
+- UI proof: [revision-bound assertions/private artifacts, or concrete N/A reason]
 
 ## Approach
 [Technical decisions from architect, refined after red-team challenges]
@@ -142,6 +153,13 @@ Write to `plans/active/issue-###-[slug].md`, plus `plans/active/issue-###.plan.j
 - email-delivery-check: [applies/N/A and why]
 - generated-artifact-check: [applies/N/A and why]
 - ui-journey-check: [applies/N/A and why]
+- external-grounding-check: [applies/N/A and why]
+- runtime-e2e-proof-check: [applies/N/A and why]
+- surface-parity-check: [applies/N/A and why]
+- trust-map-check: [applies/N/A and why]
+- volume-envelope-check: [applies/N/A and why]
+- lifecycle-state-check: [applies/N/A and why]
+- ui-proof-check: [applies/N/A and why]
 - architecture-docs-check: [applies/N/A and why]
 - doc-alignment-check: [applies/N/A and why]
 
@@ -191,6 +209,8 @@ Files likely affected:
 - `plans/active/issue-###.plan.json`
 - `.pipeline/architecture-alignment.json`
 - `.pipeline/product-intent.json`
+- `.pipeline/external-grounding.json` [when applicable]
+- `.pipeline/runtime-e2e-preflight.json` [when applicable]
 - `.pipeline/acceptance-trace.json`
 - `.pipeline/test-evidence.json`
 - `.pipeline/review-results.json`

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { evidenceGatesSchema, validateEvidenceGates } from './evidence-gates.js'
 
 export const proofModeSchema = z.enum([
   'existing-test',
@@ -27,6 +28,14 @@ export const acceptanceCriterionSchema = z.object({
   status: z.enum(['pending', 'covered', 'accepted-risk', 'blocked']),
   proof_ref: z.string().min(1).optional(),
   evidence: z.string().min(1).optional(),
+  boundary_proof: z
+    .object({
+      required: z.boolean(),
+      seam: z.string().min(1).optional(),
+      false_success_condition: z.string().min(1).optional(),
+      status: z.enum(['covered', 'not-proven', 'n/a']),
+    })
+    .optional(),
 })
 
 export const reviewCheckSchema = z.object({
@@ -59,6 +68,7 @@ export const proofContractRunSchema = z.object({
       )
       .default([]),
   }),
+  evidence_gates: evidenceGatesSchema.optional(),
   outcome: z.object({
     verdict: outcomeVerdictSchema,
     remaining_delta: z.array(z.string()).default([]),
@@ -136,6 +146,29 @@ export function validateProofContract(input: unknown): ProofContractValidation {
         `acceptance_criteria.${criterion.id}.proof_mode`,
         'Inconclusive proof cannot mark a criterion as covered.'
       )
+    }
+
+    if (criterion.boundary_proof?.required) {
+      if (!criterion.boundary_proof.seam || !criterion.boundary_proof.false_success_condition) {
+        addViolation(
+          violations,
+          `acceptance_criteria.${criterion.id}.boundary_proof`,
+          'Required boundary proof must name the seam and the false-success condition it excludes.'
+        )
+      }
+      if (criterion.status === 'covered' && criterion.boundary_proof.status !== 'covered') {
+        addViolation(
+          violations,
+          `acceptance_criteria.${criterion.id}.boundary_proof.status`,
+          'A covered criterion needs covered boundary proof when that proof is required.'
+        )
+      }
+    }
+  }
+
+  if (run.evidence_gates) {
+    for (const violation of validateEvidenceGates(run.evidence_gates)) {
+      addViolation(violations, `evidence_gates.${violation.path}`, violation.message)
     }
   }
 

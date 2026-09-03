@@ -69,6 +69,7 @@ Read these on demand. They are the source of truth for the upgraded pipeline:
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/TEST-SEAMS.md` — behavior tests through public interfaces
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARCHITECTURE-DEPTH.md` — deep-module/locality review vocabulary
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARTIFACTS.md` — evidence schemas and artifact commit policy
+- `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/EVIDENCE-GATES.md` — conditional grounding, proof-boundary, and generative evidence gates
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/VERIFIERS.md` — verifier selection, goal contracts, evaluator separation, and long-running loop artifacts
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/AGENT-BRIEF.md` — durable issue contract
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/PROJECT-CHECKS.md` — universal, risk-triggered, and architecture-doc alignment checks
@@ -110,6 +111,8 @@ Required proof fields:
 - Proof mode for every criterion: `existing-test`, `new-test`, `playwright`, `static-artifact`, `manual-smoke`, `model-judge`, or `inconclusive`.
 - Implementation evidence.
 - Review evidence.
+- Named boundary proof for every medium/high-risk criterion where a local check could falsely report success.
+- Conditional evidence-gate artifacts when external behavior, a real environment, a public surface family, untrusted data, volume, lifecycle states, or UI claims apply.
 - Final outcome verdict: exactly `PROVEN`, `NOT_PROVEN`, or `INCONCLUSIVE`.
 - Remaining delta.
 
@@ -119,6 +122,10 @@ Proof rules:
 - Missing evidence produces `NOT_PROVEN` or `INCONCLUSIVE`, never `PROVEN`.
 - `INCONCLUSIVE` may still open a PR, but the PR must clearly say human review or external evidence is needed.
 - Known equivalent public surfaces must be checked together (e.g. two pages rendering the same form).
+- A `PROVEN` criterion that crosses a medium/high-risk boundary must name its seam and the false-success condition that proof excludes.
+- External API, SDK, provider, protocol, browser, platform, and generated-setup claims need current claim-specific grounding before they can support `PROVEN`.
+- A skipped real-environment check is either an intentional guard skip (and omitted from the promise) or an unresolved proof gap; the latter cannot support `PROVEN`.
+- When the same prose review rule catches a real defect twice, propose the smallest deterministic guard and replace or narrow the repeated prose rule once the guard prevents it.
 - If review causes code changes, rerun the relevant checks and record the rerun evidence.
 - Do not say `done`, `complete`, `ready to merge`, or equivalent unless `.pipeline/outcome-evaluation.json` has verdict `PROVEN`.
 
@@ -363,6 +370,8 @@ Plan structure:
 - Risk tier: [low|medium|high]
 - Evidence mode: [minimal|standard|strict]
 - Ceremony mode: [lean|standard|strict]
+- External grounding: [applies/N/A and concrete trigger]
+- Runtime E2E preflight: [applies/N/A and concrete trigger]
 
 ## Minimum Diff Gate
 - Selected rung: [no-build|config-docs|existing-code|stdlib-native|installed-dependency|one-local-change|new-implementation]
@@ -413,6 +422,15 @@ Plan structure:
 - External references checked: [links or `none`]
 - Prior implementations/learnings reused or rejected: [summary]
 
+## Evidence Gates
+- External grounding: [official/upstream source + claim, or concrete N/A reason]
+- Runtime E2E preflight: [environment, base revision, guardrails, proves/does-not-prove, or concrete N/A reason]
+- Surface parity: [two nearest siblings, inherited concerns applied/diverged, or concrete N/A reason]
+- Trust map: [untrusted writers/neutralization and output consumers/guards, or concrete N/A reason]
+- Volume envelope: [busiest case, cost math, collection/call bound, or concrete N/A reason]
+- Lifecycle states: [object states, behavior per state, negative test, or concrete N/A reason]
+- UI proof: [revision-bound assertions and private/local artifacts, or concrete N/A reason]
+
 ## Phase PR Decision
 - Phase split required: [true|false]
 - Reason: [why one PR is enough, or why child phase PRs are needed]
@@ -459,6 +477,13 @@ Acceptance criteria:
 - email-delivery-check: [applies/N/A and why]
 - generated-artifact-check: [applies/N/A and why]
 - ui-journey-check: [applies/N/A and why]
+- external-grounding-check: [applies/N/A and why]
+- runtime-e2e-proof-check: [applies/N/A and why]
+- surface-parity-check: [applies/N/A and why]
+- trust-map-check: [applies/N/A and why]
+- volume-envelope-check: [applies/N/A and why]
+- lifecycle-state-check: [applies/N/A and why]
+- ui-proof-check: [applies/N/A and why]
 - architecture-docs-check: [applies/N/A and why]
 - doc-alignment-check: [applies/N/A and why]
 
@@ -489,6 +514,8 @@ Acceptance criteria:
 ## Artifact Manifest
 - `.pipeline/architecture-alignment.json`
 - `.pipeline/product-intent.json`
+- `.pipeline/external-grounding.json` [when applicable]
+- `.pipeline/runtime-e2e-preflight.json` [when applicable]
 - `.pipeline/acceptance-trace.json`
 - `.pipeline/progress.md`
 - `.pipeline/intent-brief.md`
@@ -508,6 +535,7 @@ After user approval:
 
 1. Update the GitHub issue body/comment with the Agent Brief from `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/AGENT-BRIEF.md`.
 2. Persist the approved plan path in `.pipeline-state.json`.
+3. Create required evidence-gate artifacts from `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/EVIDENCE-GATES.md` before the affected slice begins.
 3. If Product Intent applies and the intent is non-obvious or review-relevant, initialize `.pipeline/product-intent.json` with the Product Intent fields and intended behavior claims.
 4. Initialize `.pipeline/acceptance-trace.json` with every acceptance criterion in `status: "pending"`, its proof mode, deterministic-seam decision, and evidence target.
 5. Initialize `.pipeline/progress.md` with planned slices, accepted risks, and the next handoff note when the work is more than a tiny hotfix.
@@ -520,7 +548,7 @@ After user approval:
 2. Read affected files before editing.
 3. Before each phase or slice, do a scoped deep-research pass just for that unit of work:
    - Re-read the affected files and nearest tests.
-   - Check current external docs only when APIs/libraries/protocols are touched.
+   - When APIs, SDKs, providers, browser/platform behavior, protocols, or generated setup are touched, update `.pipeline/external-grounding.json` with current claim-specific sources and their implementation effects.
    - Confirm the test seam is still the highest correct seam.
    - For UI slices, inspect relevant existing screens/components before coding.
    - Append decisions, failed attempts, and gotchas to `.pipeline/progress.md`.
@@ -537,6 +565,7 @@ After user approval:
    - CLI/TUI/script behavior -> use a deterministic local harness or transcript; clean up temporary sessions and artifacts.
    - Measurable claims -> restate the claim in falsifiable form and capture baseline/treatment evidence when feasible.
    - Core user workflows -> run or define the closest end-to-end path the user would manually check. If automation is missing, either add a focused test or record the manual-validation gap as risk.
+   - Real-environment claims -> complete `.pipeline/runtime-e2e-preflight.json` before the run; record base revision, safe data shape, mutation guardrails, inherited failures, and exactly what the run proves and does not prove.
 8. Run targeted tests after each meaningful chunk.
 9. Run the project's `typecheck` and `build` commands (from `.claude/YALLA.md` `commands:`) where relevant.
    - On failure, group errors by file/category before editing.
@@ -569,6 +598,7 @@ Security self-check: input validation, SQL safety, auth boundaries, CSP/sanitiza
 14. Write `.pipeline/test-evidence.json` with commands, status, seam blockers, claim verification, smoke evidence, and architecture-doc alignment status when the evidence is non-obvious or needs to be committed. Otherwise summarize the same evidence in the PR body.
 15. If evidence is missing, blocked, or inconclusive, set the eventual outcome to `NOT_PROVEN` or `INCONCLUSIVE`; do not call the work complete.
 16. Update `.pipeline-state.json` to `phase: "4-review"`, `test_status: "passing"` only when required test commands passed. Otherwise record the blocker.
+17. For each applicable Evidence Gate, validate the required enumeration and link it from the acceptance trace or PR body. Treat an unresolved external-grounding or runtime-E2E gap as `NOT_PROVEN`/`INCONCLUSIVE`, never as green evidence.
 
 Validation evidence should be reviewer-digestible. For UI, workflow, or integration changes, include screenshots, trace links, HTTP transcripts, console/network summaries, or command output excerpts that prove the behavior without requiring the user to rerun everything.
 
@@ -589,6 +619,7 @@ Before fresh-context review, write `.pipeline/intent-brief.md` when the diff is 
 - Validation evidence already collected.
 - Open decisions or product implications that require human judgment.
 - Product Intent summary and intended behavior claims when the product-intent gate applies.
+- Applicable Evidence Gate verdicts, proof boundaries, and any real-environment limits.
 
 Before binary review, run a hostile self-critique and write `.pipeline/but-for-real.md`:
 
@@ -624,6 +655,16 @@ For structural changes:
 - **architecture-depth-check:** Does this change improve or preserve module depth and locality? Are new seams justified by real adapters?
 - **architecture-docs-check:** Does the PRD/plan cite the right architecture docs, does the code conform to those docs or update them in the same PR, and does `.pipeline/architecture-alignment.json` prove the verdict?
 - **strict-structure-check (conditional):** For broad/high-risk diffs, is there a clear code-judo simplification that would delete complexity, avoid file-size blowups, or prevent spaghetti branching before shipping?
+
+Evidence-triggered checks:
+
+- **external-grounding-check (conditional):** Are external behavior claims grounded in current official/upstream evidence, with the source consequences reflected in code and tests?
+- **runtime-e2e-proof-check (conditional):** Does every real-environment run declare target/base revision, safe shape, guardrails, inherited failures, and exact proves/does-not-prove boundaries?
+- **surface-parity-check (conditional):** Does a new/ported public entrypoint enumerate two nearest siblings and apply or explicitly justify inherited auth, rate, error, telemetry, time, and header behavior?
+- **trust-map-check (conditional):** Are untrusted writers, neutralization, output execution contexts, and output guards enumerated?
+- **volume-envelope-check (conditional):** Does collection/per-item external work state the busiest case, cost math, and an explicit page/concurrency/time bound?
+- **lifecycle-state-check (conditional):** Does each consumed stateful object enumerate behavior per state plus a negative test?
+- **ui-proof-check (conditional):** Do user-visible claims have revision-bound assertions and private/local proof artifacts free of sensitive data?
 
 Risk-triggered checks:
 
@@ -689,12 +730,14 @@ Categorize root causes:
 - Tooling issue
 - Artifact drift
 - Product intent drift
+- Repeated prose-only review finding
 
 Route durable learnings to the smallest lasting home:
 
 - Your conventions doc (CLAUDE.md / AGENTS.md) only for global repo rules future agents must know before coding.
 - `.claude/YALLA.md` for pipeline-specific defaults, gotchas, or domain mapping.
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/product/*` for reusable product-intent, assumption-testing, GTM, metrics, or intended-vs-implemented guidance.
+- A source check, lint rule, contract test, or fixture when the same prose review rule catches a real defect twice; remove or narrow the now-redundant prose rule only after the deterministic check passes.
 - `docs/learnings/YYYY-MM-DD-[topic].md` for incident/process-specific directives.
 - `.pipeline/progress.md` only for ephemeral handoff context that should not persist after the PR.
 
@@ -788,6 +831,12 @@ Decision needed from the operator/maintainer:
 ## Validation Evidence
 - [commands, screenshots, traces, transcripts, or accepted gaps]
 
+## Evidence Gates
+- External grounding: [sources + implementation consequence, or N/A with reason]
+- Proof boundaries: [criterion -> seam + false-success condition, or N/A with reason]
+- Runtime E2E: [environment/base/guardrails/proves/does-not-prove, or N/A with reason]
+- Generative gates: [surface parity / trust map / volume envelope / lifecycle states / UI proof — Pass or N/A with reason]
+
 ## Documentation Impact
 - [updated docs or no-impact reason]
 
@@ -804,6 +853,8 @@ Decision needed from the operator/maintainer:
 - [x] success-invariant-check: Pass
 - [x] behavior tests passing through public seams
 - [x] test-quality-check: Pass
+- [x] external-grounding/runtime-e2e-proof: [Pass or N/A with reason]
+- [x] surface-parity/trust-map/volume-envelope/lifecycle-state/ui-proof: [Pass or N/A with reason]
 
 ## Merge Policy
 - pr-only by default. Auto-merge only if explicitly approved in this run.

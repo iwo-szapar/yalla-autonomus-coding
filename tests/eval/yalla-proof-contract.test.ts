@@ -101,4 +101,53 @@ describe('yalla proof contract', () => {
     expect(result.violations.some(violation => violation.message.includes('Inconclusive proof'))).toBe(true)
     expect(result.violations.some(violation => violation.message.includes('PROVEN requires all evidence commands'))).toBe(true)
   })
+
+  it('does not allow an ungrounded boundary claim to be disguised as proven proof', () => {
+    const result = validateProofContract({
+      issue_id: 'issue-44',
+      issue_intent: {
+        summary: 'Use the provider retry contract safely.',
+        user_visible_promise: 'Provider retry behavior is handled correctly.',
+      },
+      acceptance_criteria: [
+        {
+          id: 'ac-1',
+          description: 'Retry behavior follows the provider contract.',
+          negative_path: true,
+          proof_mode: 'new-test',
+          deterministic_seam_available: true,
+          status: 'covered',
+          evidence: 'tests/provider-retry.test.ts',
+          boundary_proof: {
+            required: true,
+            seam: 'provider adapter',
+            false_success_condition: 'A local fake can accept retry behavior the provider rejects.',
+            status: 'not-proven',
+          },
+        },
+      ],
+      implementation_evidence: {
+        changed_surfaces: ['src/provider-adapter.ts'],
+        equivalent_surfaces_checked: [],
+        commands: [{ command: 'npm test -- provider-retry', status: 'pass', summary: 'Targeted provider retry test passes.' }],
+      },
+      review_evidence: {
+        required_checks: ['external-grounding-check'],
+        checks: [{ name: 'external-grounding-check', verdict: 'pass', findings: [] }],
+        review_triggered_edits: [],
+      },
+      evidence_gates: {
+        external_grounding: { applies: true, trigger: 'provider retry contract', verdict: 'inconclusive' },
+      },
+      outcome: {
+        verdict: 'PROVEN',
+        remaining_delta: [],
+        pr_reviewability: { summary: 'Ready.', risks: [], human_decisions_needed: [] },
+      },
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.violations.some(violation => violation.message.includes('covered boundary proof'))).toBe(true)
+    expect(result.violations.some(violation => violation.message.includes('must be grounded'))).toBe(true)
+  })
 })

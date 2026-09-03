@@ -121,6 +121,19 @@ Use these when the task triggers the relevant surface or failure mode. Mark `N/A
 - [ ] Merge conflict resolution stays minimal, leaves no markers, and regenerates lockfiles through package tools
 - [ ] Broad/high-risk diffs run strict structural review for code-judo simplification, spaghetti growth, file-size blowups, and unearned abstractions
 
+## Portable Evidence Gates
+
+Run only when the listed trigger applies. A generic `N/A` is not valid; write the concrete reason.
+
+- [ ] External API/SDK/provider/protocol/browser/platform/generated-setup behavior -> `.pipeline/external-grounding.json` names current official/upstream sources, the exact claims used, and implementation consequences
+- [ ] Preview/staging/production/remote proof claim -> `.pipeline/runtime-e2e-preflight.json` names target/base revision, safe environment shape, mutation guardrails, inherited baseline failures, and exact proves/does-not-prove limits
+- [ ] New or ported public route/API/CLI/job/webhook/cron -> surface parity names two nearest siblings and applies or justifies auth, rate-limit, error, telemetry, time-budget, and header behavior
+- [ ] Untrusted input or rendered/exported output -> trust map names each writer/hostile input neutralization and each consuming execution context/output guard
+- [ ] Collection read or per-item external call -> volume envelope states busiest realistic case, cost math, a page/concurrency/time bound, and explicit truncation behavior
+- [ ] Stateful provider/token/access grant/entitlement/money-adjacent object -> lifecycle review states behavior for every consumed state and names a negative test
+- [ ] User-visible claim -> UI proof has revision-bound assertions plus local/private artifacts; no sensitive data and no anonymous/public upload by default
+- [ ] A prose review rule catches the same real defect twice -> propose the smallest source check, lint rule, contract test, or fixture; retain it only if it prevents the failure without widening unrelated work
+
 ## Doc-Alignment Checklist (when public-facing surfaces change)
 
 Run when tools/commands, endpoints, routes, config keys, or migrations change. Replace the placeholders with your project's real doc paths.

@@ -29,7 +29,7 @@ git diff "$BASE_BRANCH" --name-only
 git diff "$BASE_BRANCH"
 ```
 
-Also read `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARTIFACTS.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/TEST-SEAMS.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARCHITECTURE-DEPTH.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/PROJECT-CHECKS.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/REVIEW-CHECKS.md`, and `${CLAUDE_PLUGIN_ROOT}/knowledge/product/INTENDED-VS-IMPLEMENTED.md` before launching reviewers.
+Also read `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARTIFACTS.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/EVIDENCE-GATES.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/TEST-SEAMS.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARCHITECTURE-DEPTH.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/PROJECT-CHECKS.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/REVIEW-CHECKS.md`, and `${CLAUDE_PLUGIN_ROOT}/knowledge/product/INTENDED-VS-IMPLEMENTED.md` before launching reviewers.
 
 ## Step 2: Launch Reviewers
 
@@ -172,6 +172,24 @@ Specifics to check:
 
 **voice-check:**
 > "Does this content match the project voice? Is there corporate slop, AI-sounding language, or tone mismatch?"
+
+### Run for portable evidence triggers:
+
+Use the full binary definitions in `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/REVIEW-CHECKS.md`. Every N/A needs a concrete reason in the plan or review artifact.
+
+**external-grounding-check:** Run when external API, SDK, provider, protocol, browser/platform behavior, or generated setup instructions determine a behavior claim. Verify authoritative current sources and implementation consequences.
+
+**runtime-e2e-proof-check:** Run when preview, staging, production, remote, or other real-environment proof is claimed. Verify target/base revision, safe environment shape, guardrails, inherited failures, and proves/does-not-prove limits.
+
+**surface-parity-check:** Run for a new/ported API, CLI, job, webhook, cron, or public entrypoint. Verify at least two siblings and explicit treatment of inherited auth, rate, error, telemetry, time, and header behavior.
+
+**trust-map-check:** Run when consuming untrusted input or emitting a rendered/exported artifact. Verify each writer/neutralization and each output consumer/guard.
+
+**volume-envelope-check:** Run for collection reads or per-item external calls. Verify busiest-case math and explicit page/concurrency/time bounds.
+
+**lifecycle-state-check:** Run for stateful provider/token/access-grant/entitlement/money-adjacent objects. Verify behavior per consumed state and a negative test.
+
+**ui-proof-check:** Run for user-visible claims. Verify revision-bound assertions and private/local artifacts without secrets, customer data, or anonymous public uploads.
 
 ### Run for payment / fee / pricing changes:
 

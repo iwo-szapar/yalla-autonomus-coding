@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url'
+import { runEvidenceGateFixtures } from './evidence-gates-runner.js'
 import { runMinimumDiffFixtures } from './minimum-diff-runner.js'
 import { runOutcomeQuality } from './outcome-quality.js'
 import { runPlanReviewCoverageFixtures } from './plan-review-coverage-runner.js'
@@ -7,15 +8,17 @@ import { runTestInventoryFixtures } from './test-inventory-runner.js'
 
 export function runYallaSmoke() {
   const proofContract = runProofContractFixtures()
+  const evidenceGates = runEvidenceGateFixtures()
   const testInventory = runTestInventoryFixtures()
   const minimumDiff = runMinimumDiffFixtures()
   const planReviewCoverage = runPlanReviewCoverageFixtures()
   const outcomeQuality = runOutcomeQuality()
-  const passed = proofContract.passed && testInventory.passed && minimumDiff.passed && planReviewCoverage.passed && outcomeQuality.passed
+  const passed = proofContract.passed && evidenceGates.passed && testInventory.passed && minimumDiff.passed && planReviewCoverage.passed && outcomeQuality.passed
 
   return {
     passed,
     proof_contract: proofContract.summary,
+    evidence_gates: evidenceGates.summary,
     test_inventory: testInventory.summary,
     minimum_diff: minimumDiff.summary,
     plan_review_coverage: planReviewCoverage.summary,
