@@ -1,7 +1,7 @@
 {
   "name": "yalla",
   "version": "1.4.0",
-  "description": "Proof-first autonomous coding pipeline with minimum-diff discipline, binary review, and PR-only shipping.",
+  "description": "Proof-first autonomous coding pipeline with minimum-diff discipline, binary review, optional visual decision support, and PR-only shipping.",
   "author": {
     "name": "Iwo Szapar",
     "url": "https://github.com/iwo-szapar"
@@ -9,12 +9,12 @@
   "homepage": "https://github.com/iwo-szapar/yalla",
   "repository": "https://github.com/iwo-szapar/yalla",
   "license": "MIT",
-  "keywords": ["autonomous-coding", "proof-contract", "code-review", "minimum-diff", "agents"],
+  "keywords": ["autonomous-coding", "proof-contract", "code-review", "minimum-diff", "visual-explainability", "agents"],
   "skills": "./skills/",
   "interface": {
     "displayName": "Yalla",
     "shortDescription": "Proof-first PR pipeline",
-    "longDescription": "Plan, build, test, review, and open PRs only when the user-visible promise is proven by deterministic evidence where possible.",
+    "longDescription": "Plan, build, test, review, and explain cross-boundary changes with compact visuals. Open PRs only when the user-visible promise is proven by deterministic evidence where possible.",
     "developerName": "Iwo Szapar",
     "category": "Productivity",
     "capabilities": ["Instructions", "Skills"],
@@ -22,7 +22,8 @@
     "defaultPrompt": [
       "Use Yalla to build this as a tested PR.",
       "Review this diff with Yalla binary checks.",
-      "Find the minimum safe diff for this change."
+      "Find the minimum safe diff for this change.",
+      "Show me the smallest accurate diagram of this Yalla change."
     ],
     "brandColor": "#111111"
   }

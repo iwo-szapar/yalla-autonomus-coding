@@ -27,6 +27,11 @@ For every changed workflow, define its success invariant: the workflow is not su
 
 For non-trivial work, also apply the operator-understanding protocol (see `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/`): the run is not operator-ready until the operator/maintainer has a plain-English explanation of the problem, solution, tradeoff, impact, risks, and verification. Use the protocol's `light/default/deep` modes so small changes do not inherit a full teaching ceremony.
 
+When an active planning or review decision crosses several code, user, or system
+boundaries, use `/yalla-show` and `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/VISUAL-EXPLAINABILITY.md`
+to add the smallest truthful visual. It is optional decision support, never a
+replacement for deterministic proof or the Proof Contract.
+
 Bias toward launchable increments. Prefer the smallest user-testable version that can reach real users without violating the success invariant. Do not expand scope to make the system feel complete unless the user-visible promise requires it.
 
 Treat each branch/worktree as a shippable save point. If the work is too broad to review, test, or roll back as one coherent user-visible change, split it into phase PRs instead of carrying one large diff to the end.
@@ -357,7 +362,7 @@ For UI changes, add a design pre-pass before implementation planning:
 - Screenshots, references, or prototypes to inspect.
 - Non-goals so the agent does not drift into generic redesign.
 
-For ambiguous UI, product, architecture, or milestone choices, create a visual planning artifact before asking for approval. Use a concise HTML file or similarly scannable artifact instead of a long wall of markdown when the user needs to compare options. Include clear option cards, tradeoffs, risk level, and a recommended choice. The artifact is planning aid, not a requirement for tiny fixes.
+For ambiguous UI, product, architecture, or milestone choices, read `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/VISUAL-EXPLAINABILITY.md` and create the smallest suitable visual before asking for approval. Use a concise HTML file only when the user needs to compare options that a code-shape sketch, tree, focused diff, or Mermaid flow cannot explain. Include real labels, tradeoffs, risk level, and a recommendation. The artifact is planning aid, not a requirement for tiny fixes or proof of the chosen option.
 
 Use subagents deliberately when exploration would bloat the main context:
 

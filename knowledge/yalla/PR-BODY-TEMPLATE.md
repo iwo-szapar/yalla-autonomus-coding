@@ -79,6 +79,7 @@ Decision needed from the operator/maintainer:
 
 ## Artifacts
 - [Committed artifacts that matter for review, or N/A - evidence summarized above]
+- Visual explainer: [path or N/A — include only when it clarifies a cross-boundary decision; it is not proof evidence]
 
 ## Merge Policy
 - `pr-only` by default. Auto-merge only if explicitly approved in this run.

@@ -20,6 +20,12 @@ Risk gates are triggered by the changed files and workflow. Do not run every his
 
 For non-trivial work, include the operator-understanding layer (see `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/`). This check verifies that the operator/maintainer can understand the change without reading code; it does not quiz the operator or grade writing polish.
 
+When a reviewer could not understand an important cross-boundary change, failure
+path, or tradeoff from the PR summary alone, use `/yalla-show` and
+`${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/VISUAL-EXPLAINABILITY.md` to add the
+smallest truthful visual. It may improve reviewability, but it cannot substitute
+for test, trace, screenshot, or other proof evidence.
+
 ---
 
 ## Step 1: Get Changed Files
