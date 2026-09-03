@@ -50,6 +50,81 @@ Universal checks stay small and run on most diffs. Risk-triggered checks run onl
 - Tests only assert rendering/compilation while the behavior is user/API/tool visible
 - Claim verification verdict is `NOT VERIFIED` or `INCONCLUSIVE` but presented as success
 
+## external-grounding-check
+
+> "When external behavior matters, are the implementation and its claims grounded in current authoritative evidence?"
+
+Run for external APIs, SDKs, providers, protocols, browser/platform behavior, or generated setup instructions.
+
+**Fail criteria:**
+- `.pipeline/external-grounding.json` or equivalent PR evidence is missing
+- Source is stale, non-authoritative without justification, or does not support the claimed behavior
+- Code/tests do not reflect the documented consequence
+- `inconclusive` grounding is presented as `PROVEN`
+
+## runtime-e2e-proof-check
+
+> "When a run claims a real environment, does its evidence state exactly what the run can and cannot prove?"
+
+Run for preview, staging, production, remote, or other real-environment evidence.
+
+**Fail criteria:**
+- Deployed target revision, target environment, or base revision is absent
+- Environment/data shape or mutation guardrails expose secrets/customer data or are missing
+- Baseline failures are silently attributed to the change
+- `unresolved-proof-gap` or an untested behavior is presented as `PROVEN`
+
+## surface-parity-check
+
+> "Does a new or ported public entrypoint preserve the relevant behavior of its nearest siblings?"
+
+Run for a new or ported API, CLI, job, webhook, cron, or public entrypoint.
+
+**Fail criteria:**
+- Fewer than two nearest siblings are checked without a concrete reason
+- Auth, rate limits, error taxonomy, telemetry, time budgets, or headers are silently omitted
+- A divergence lacks an explicit rationale and evidence
+
+## trust-map-check
+
+> "Are hostile inputs neutralized and outputs guarded for their actual consuming context?"
+
+Run when untrusted input is consumed or an artifact/export/rendered output is emitted.
+
+**Fail criteria:**
+- Writer/hostile status or neutralization is not enumerated for an input
+- Output consumer context or escaping/guard is unknown
+- Review checks only the producer and ignores the downstream execution context
+
+## volume-envelope-check
+
+> "Is collection or per-item external work bounded for the busiest realistic case?"
+
+**Fail criteria:**
+- No concrete busiest case or cost math
+- Pagination, concurrency, timeout, or truncation bound is absent
+- A large or unbounded collection can amplify calls, cost, or run time unexpectedly
+
+## lifecycle-state-check
+
+> "Does code define behavior for every consumed state of a stateful external object?"
+
+Run for providers, tokens, access grants, entitlements, and money-adjacent objects.
+
+**Fail criteria:**
+- Consumed states are implicit or incomplete
+- A terminal/negative state can report success
+- No negative test guards the most consequential state transition
+
+## ui-proof-check
+
+> "Do UI claims have revision-bound evidence that safely demonstrates the claimed behavior?"
+
+**Fail criteria:**
+- Assertions do not name the user-visible behavior they prove
+- Screenshot/trace/recording is stale, missing, or detached from the tested revision
+- Sensitive data appears in the artifact or it is uploaded to an anonymous/public host by default
+
 ## reviewability-check
 
 > "Can a reviewer understand the intent, risk, changed behavior, evidence, and entry points without reconstructing the run?"

@@ -13,7 +13,9 @@ A run is valid only when it records:
 - A proof mode for every criterion.
 - Deterministic proof whenever a deterministic seam exists.
 - Implementation evidence and passing commands for `PROVEN` outcomes.
+- The persisted classification `required_gates`; final review and evidence must remain a superset of every gate armed there.
 - Required review checks with passing verdicts before `PROVEN`.
+- An applicable or concrete N/A decision for every portable evidence gate before `PROVEN`.
 - Review-triggered reruns when review causes edits.
 - Final verdict of exactly `PROVEN`, `NOT_PROVEN`, or `INCONCLUSIVE`.
 
@@ -23,6 +25,7 @@ A run is valid only when it records:
 
 ```bash
 npm run eval:yalla:proof-contract
+npm run eval:yalla:evidence-gates
 npm run eval:yalla:test-inventory
 npm run eval:yalla:minimum-diff
 npm run eval:yalla:plan-quality
@@ -41,6 +44,8 @@ The proof-contract command prints a JSON report showing:
 - Before patch: P0 legacy samples fail the strict contract.
 - After patch: P0 patched samples pass.
 - Held-out samples keep `INCONCLUSIVE` from becoming success.
+
+The evidence-gates command checks portable source grounding, revision-bound real-environment proof limits, and generative surface-parity evidence. It rejects ungrounded external behavior, blocked runtime proof, malformed deployment refs, unsafe UI captures, and unresolved runtime proof gaps from a `PROVEN` path.
 
 The test-inventory command validates `eval/yalla/test-inventory.json` and its fixtures. It enforces:
 

@@ -31,6 +31,17 @@ Tiny hotfixes may use minimal evidence mode: no committed `.pipeline/*` artifact
   "product_intent_gate_reason": "Changed onboarding copy and delivery behavior",
   "architecture_doc_gate": "applies|n/a",
   "architecture_doc_gate_reason": "Changed the payment success flow documented in docs/architecture/flows.md",
+  "external_grounding_gate": "applies|n/a",
+  "external_grounding_gate_reason": "Uses provider retry semantics",
+  "runtime_e2e_gate": "applies|n/a",
+  "runtime_e2e_gate_reason": "PR claims preview-environment evidence",
+  "evidence_gate_requirements": {
+    "surface_parity": { "status": "applies|n/a", "reason": "Adds a public API route" },
+    "trust_map": { "status": "applies|n/a", "reason": "Consumes an untrusted display name" },
+    "volume_envelope": { "status": "applies|n/a", "reason": "Makes one provider call per record" },
+    "lifecycle_states": { "status": "applies|n/a", "reason": "Consumes provider job states" },
+    "ui_proof": { "status": "applies|n/a", "reason": "Changes a user-visible error state" }
+  },
   "merge_policy": "pr-only"
 }
 ```
@@ -67,7 +78,14 @@ Tiny hotfixes may use minimal evidence mode: no committed `.pipeline/*` artifact
   ],
   "risks": [
     {"risk": "...", "resolution": "mitigated|accepted|user-decision"}
-  ]
+  ],
+  "evidence_gates": {
+    "surface_parity": { "status": "applies|n/a", "reason": "..." },
+    "trust_map": { "status": "applies|n/a", "reason": "..." },
+    "volume_envelope": { "status": "applies|n/a", "reason": "..." },
+    "lifecycle_states": { "status": "applies|n/a", "reason": "..." },
+    "ui_proof": { "status": "applies|n/a", "reason": "..." }
+  }
 }
 ```
 
@@ -138,11 +156,66 @@ Required when Product Intent applies and the intent is non-obvious, review-relev
       "deterministic_seam_available": true,
       "test": "tests/api/foo.test.ts",
       "status": "covered|accepted-risk|blocked",
-      "evidence": "<test command> tests/api/foo.test.ts"
+      "evidence": "<test command> tests/api/foo.test.ts",
+      "boundary_proof": {
+        "required": true,
+        "seam": "POST /api/foo",
+        "false_success_condition": "A unit-only assertion could pass while the endpoint accepts an unauthorized caller",
+        "status": "covered|not-proven|n/a"
+      }
     }
   ]
 }
 ```
+
+For medium/high-risk criteria, set `boundary_proof.required` when a local or mocked check could falsely report the user-visible promise as successful. A `covered` criterion must then have `boundary_proof.status: "covered"`.
+
+### `.pipeline/external-grounding.json`
+
+Required when implementation relies on external API, SDK, protocol, provider/platform/browser behavior, or generated setup instructions. Do not put secrets in this artifact.
+
+```json
+{
+  "applies": true,
+  "trigger": "Provider retry semantics determine the job retry policy",
+  "verdict": "grounded|inconclusive|n/a",
+  "sources_checked": [
+    {
+      "source_type": "official-docs|upstream-source|standards|local-contract",
+      "name": "Provider API retry guide",
+      "url_or_path": "https://provider.example/docs/retries",
+      "accessed_at": "2026-09-03",
+      "claims": ["429 responses are retryable; ordinary 4xx responses are not"]
+    }
+  ],
+  "implementation_effects": ["Retry 429 and 5xx with bounded backoff"],
+  "missing_evidence": []
+}
+```
+
+`inconclusive` grounding cannot support `PROVEN` for a behavior that depends on it.
+
+### `.pipeline/runtime-e2e-preflight.json`
+
+Required before a run claims preview, staging, production, remote, or another real-environment proof. Record only safe environment shape, never credential values or customer data.
+
+```json
+{
+  "applies": true,
+  "environment": "preview",
+  "base_ref": "main@abc123",
+  "target_ref": "preview@def456",
+  "required_shape": ["test account present"],
+  "mutation_guardrails": ["No production writes"],
+  "skip_classification": "none|intentional-guard-skip|unresolved-proof-gap",
+  "inherited_base_failures": [],
+  "proves": ["Preview route renders the provider retry error"],
+  "does_not_prove": ["A production payment completes"],
+  "status": "pass|blocked|n/a"
+}
+```
+
+`base_ref` and `target_ref` use `<target>@<revision>` and must identify the immutable base and deployed target revision being exercised. An `unresolved-proof-gap` or any status other than `pass` means the corresponding promise cannot be marked `PROVEN`. An intentional guard skip is valid only when `does_not_prove` names the skipped behavior and that behavior is excluded from the PR promise.
 
 ### `.pipeline/progress.md`
 
@@ -299,7 +372,7 @@ Required before shipping. This is the final proof-contract artifact that decides
 
 Verdict rules:
 
-- `PROVEN` requires every acceptance criterion to be covered by valid evidence, every required review check to pass, all required commands to pass, and no remaining delta.
+- `PROVEN` requires every acceptance criterion to be covered by valid evidence, the persisted classification `required_gates` to remain a subset of final required review checks, an applicable or concrete N/A decision for every portable evidence gate, every required review check to pass, all required commands to pass, and no remaining delta.
 - `NOT_PROVEN` means evidence or review disproves the issue promise.
 - `INCONCLUSIVE` means proof is blocked or external evidence is unavailable. It does not count as complete or safe for autopilot progression.
 

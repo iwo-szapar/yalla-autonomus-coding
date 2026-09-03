@@ -103,6 +103,18 @@
           }
         ]
       },
+      "classification_evidence": {
+        "required_gates": ["correctness-check", "schema-migration-check", "slop-check", "evidence-check", "reviewability-check"]
+      },
+      "evidence_gates": {
+        "external_grounding": { "applies": false, "reason": "No external behavior is used." },
+        "runtime_e2e_preflight": { "applies": false, "reason": "Deterministic local proof is sufficient." },
+        "surface_parity": { "applies": false, "reason": "No public entrypoint is added or ported." },
+        "trust_map": { "applies": false, "reason": "No new untrusted input or emitted artifact boundary." },
+        "volume_envelope": { "applies": false, "reason": "No collection or per-item external work." },
+        "lifecycle_states": { "applies": false, "reason": "No stateful external object is consumed." },
+        "ui_proof": { "applies": false, "reason": "No UI proof claim is made." }
+      },
       "outcome": {
         "verdict": "PROVEN",
         "remaining_delta": [],
@@ -218,6 +230,18 @@
         ],
         "review_triggered_edits": []
       },
+      "classification_evidence": {
+        "required_gates": ["correctness-check", "payment-integrity-check", "ui-journey-check", "evidence-check", "reviewability-check"]
+      },
+      "evidence_gates": {
+        "external_grounding": { "applies": false, "reason": "No external behavior is used." },
+        "runtime_e2e_preflight": { "applies": false, "reason": "Deterministic local proof is sufficient." },
+        "surface_parity": { "applies": false, "reason": "No public entrypoint is added or ported." },
+        "trust_map": { "applies": false, "reason": "No new untrusted input or emitted artifact boundary." },
+        "volume_envelope": { "applies": false, "reason": "No collection or per-item external work." },
+        "lifecycle_states": { "applies": false, "reason": "No stateful external object is consumed." },
+        "ui_proof": { "applies": false, "reason": "No UI proof claim is made." }
+      },
       "outcome": {
         "verdict": "PROVEN",
         "remaining_delta": [],
@@ -312,6 +336,18 @@
           { "name": "reviewability-check", "verdict": "pass", "findings": [] }
         ],
         "review_triggered_edits": []
+      },
+      "classification_evidence": {
+        "required_gates": ["security-check", "correctness-check", "evidence-check", "reviewability-check"]
+      },
+      "evidence_gates": {
+        "external_grounding": { "applies": false, "reason": "No external behavior is used." },
+        "runtime_e2e_preflight": { "applies": false, "reason": "Deterministic local proof is sufficient." },
+        "surface_parity": { "applies": false, "reason": "No public entrypoint is added or ported." },
+        "trust_map": { "applies": false, "reason": "No new untrusted input or emitted artifact boundary." },
+        "volume_envelope": { "applies": false, "reason": "No collection or per-item external work." },
+        "lifecycle_states": { "applies": false, "reason": "No stateful external object is consumed." },
+        "ui_proof": { "applies": false, "reason": "No UI proof claim is made." }
       },
       "outcome": {
         "verdict": "PROVEN",

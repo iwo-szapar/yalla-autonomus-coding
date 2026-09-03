@@ -57,6 +57,8 @@ A run is "done" only when its **verdict is `PROVEN`** — and `PROVEN` is backed
 
 Missing evidence never becomes `PROVEN`. Deterministic proof is preferred — Yalla won't lean on a model judge when a concrete test or check can verify the behavior. This is what stops "looks done" from masquerading as "is done."
 
+When the work makes an external or real-environment claim, Yalla records the authoritative source or E2E preflight before implementation. For public surfaces, untrusted data, high-volume work, stateful provider objects, and UI claims, it activates a small generative gate: enumerate the relevant siblings, trust boundary, bounds, states, or revision-bound proof instead of replying with a generic checklist.
+
 ## Adaptive classification
 
 Not every task deserves the same ceremony. Phase 0 first asks whether code is needed at all, then classifies the work and routes it:
@@ -88,6 +90,7 @@ A run leaves a trail under `.pipeline/` so a reviewer can decide where to look c
 - `visual-evidence/` / `benchmarks.json` — optional screenshot, image, and benchmark evidence rendered into the local report.
 - `acceptance-trace.json` — every criterion, its proof mode, and its evidence status.
 - `test-evidence.json` — commands run, pass/fail, falsifiable claim verdicts, smoke evidence.
+- `external-grounding.json` / `runtime-e2e-preflight.json` — conditional source grounding and environment proof boundaries.
 - `review-results.json` — each binary check and its verdict.
 - `intent-brief.md` / `progress.md` — what a senior reviewer needs before the diff, and the running build log.
 - `outcome-evaluation.json` — the final `PROVEN` / `NOT_PROVEN` / `INCONCLUSIVE` verdict.

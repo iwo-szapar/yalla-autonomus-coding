@@ -1,0 +1,96 @@
+[
+  {
+    "id": "external-contract-must-be-grounded",
+    "priority": "P0",
+    "held_out": false,
+    "source": "Portable SBF external-behavior review",
+    "legacy_should_fail": true,
+    "patched_should_pass": true,
+    "legacy": {
+      "external_grounding": {
+        "applies": true,
+        "trigger": "provider retry semantics",
+        "verdict": "inconclusive"
+      }
+    },
+    "patched": {
+      "external_grounding": {
+        "applies": true,
+        "trigger": "provider retry semantics",
+        "verdict": "grounded",
+        "sources_checked": [
+          {
+            "source_type": "official-docs",
+            "name": "Provider retry documentation",
+            "url_or_path": "https://example.com/retries",
+            "accessed_at": "2026-09-03",
+            "claims": ["429 responses are retryable"]
+          }
+        ],
+        "implementation_effects": ["Retry 429 with bounded backoff"]
+      }
+    }
+  },
+  {
+    "id": "public-surface-must-enumerate-inherited-concerns",
+    "priority": "P0",
+    "held_out": false,
+    "source": "Portable SBF surface-parity review",
+    "legacy_should_fail": true,
+    "patched_should_pass": true,
+    "legacy": {
+      "surface_parity": {
+        "applies": true,
+        "reason": "new public API route",
+        "family": "API routes"
+      }
+    },
+    "patched": {
+      "surface_parity": {
+        "applies": true,
+        "reason": "new public API route",
+        "family": "API routes",
+        "siblings": ["api/orders.ts", "api/invoices.ts"],
+        "inherited_concerns": [
+          {
+            "concern": "auth and error taxonomy",
+            "decision": "applied",
+            "evidence": "matches nearest route contracts"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "runtime-proof-gap-is-not-green",
+    "priority": "P1",
+    "held_out": true,
+    "source": "Portable SBF real-environment preflight",
+    "legacy_should_fail": true,
+    "patched_should_pass": true,
+    "legacy": {
+      "runtime_e2e_preflight": {
+        "applies": true,
+        "environment": "preview",
+        "base_ref": "main@abc123",
+        "target_ref": "preview@def456",
+        "skip_classification": "unresolved-proof-gap",
+        "status": "blocked"
+      }
+    },
+    "patched": {
+      "runtime_e2e_preflight": {
+        "applies": true,
+        "environment": "preview",
+        "base_ref": "main@abc123",
+        "target_ref": "preview@def456",
+        "required_shape": ["test account present"],
+        "mutation_guardrails": ["No production writes"],
+        "skip_classification": "intentional-guard-skip",
+        "proves": ["Preview route renders the provider error"],
+        "does_not_prove": ["A real production payment"],
+        "status": "pass"
+      }
+    }
+  }
+]
