@@ -75,6 +75,13 @@ Run a section only when the touched files or workflow match its trigger. A docs-
 - [ ] Errors render under the correct fields
 - [ ] Mobile width (~375px) remains usable
 
+### Browser Interaction Durability
+- [ ] User typing is not lost or reverted during save/debounce/optimistic-update cycles
+- [ ] Caret, selection, and focus remain stable for the changed editing/form flow
+- [ ] Navigation away/back and reload preserve the expected saved state
+- [ ] Browser evidence captures unexpected console errors and failed network requests
+- [ ] Manual repro steps are converted into browser assertions, or `TEST_SEAM_BLOCKED`/`manual-smoke` evidence explains why automation is unavailable
+
 ## Architecture-Doc Source Map
 
 Use this before writing a PRD/plan, before testing, and during review. Map task-description keywords to the architecture docs they touch. Replace the generic targets below with your project's real doc paths.
@@ -113,6 +120,7 @@ Use these when the task triggers the relevant surface or failure mode. Mark `N/A
 - [ ] Build/typecheck failures are grouped by file/category before fixes begin
 - [ ] User-visible, CLI, API, performance, or memory claims are stated falsifiably and recorded as `VERIFIED`, `NOT VERIFIED`, or `INCONCLUSIVE`
 - [ ] UI changes use a browser/devtools/automation harness or record why automated UI evidence is blocked
+- [ ] Browser-interaction bugs assert the actual browser-visible invariant instead of relying only on component render tests
 - [ ] CLI/TUI/script changes use a deterministic local harness or transcript where manual poking would be ambiguous
 - [ ] Smoke/e2e checks record flake risk separately from deterministic failures
 - [ ] Existing PR updates fetch and address blocking review comments before shipping

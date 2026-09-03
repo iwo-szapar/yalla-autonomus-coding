@@ -127,6 +127,16 @@ Write to `plans/active/issue-###-[slug].md`, plus `plans/active/issue-###.plan.j
 ## Success Invariant
 [From spec-validator — what must be true before the workflow can be marked successful]
 
+## Plan Verification Brief
+- User-visible promise: [one sentence]
+- Success invariant: [this is not successful until...]
+- Highest-risk assumption: [what could make this plan wrong]
+- Codebase evidence checked: [paths/docs/tests inspected]
+- Negative or false-success path: [what must not be accidentally marked successful]
+- Proof plan: [test/browser/API/static/manual evidence for each acceptance criterion]
+- Human review focus: [the 2-4 files/behaviors worth inspecting closely]
+- Tracker writeback: [GitHub/Linear comment/state update that will be made before implementation]
+
 ## Product Intent
 - Applies: [true/false and why]
 - Intended outcome: [user/business outcome, not implementation output]
@@ -160,6 +170,7 @@ Write to `plans/active/issue-###-[slug].md`, plus `plans/active/issue-###.plan.j
 - volume-envelope-check: [applies/N/A and why]
 - lifecycle-state-check: [applies/N/A and why]
 - ui-proof-check: [applies/N/A and why]
+- browser-interaction-check: [applies/N/A and why]
 - architecture-docs-check: [applies/N/A and why]
 - doc-alignment-check: [applies/N/A and why]
 

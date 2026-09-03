@@ -34,6 +34,8 @@ Rank biggest cut first:
 
 Tags: `delete`, `existing`, `stdlib`, `native`, `dependency`, `yagni`, `shrink`, `test-seam`.
 
+Keep the report to high-confidence cuts. Prefer five deletions a maintainer can act on today over a long speculative inventory.
+
 End with:
 
 `net: -<N> lines, -<M> deps possible.`

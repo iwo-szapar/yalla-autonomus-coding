@@ -1,0 +1,10 @@
+{
+  "name": "yalla-mcp",
+  "version": "1.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Dependency-free MCP prompt/tool wrapper for Yalla instructions.",
+  "scripts": {
+    "test": "node --test test/instructions.test.js"
+  }
+}

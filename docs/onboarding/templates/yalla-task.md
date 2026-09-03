@@ -28,6 +28,17 @@ Known non-negotiables, risky areas, or things not to change.
 
 Commands or manual checks a human would run.
 
+## Browser Repro
+
+For browser-facing issues, include exact steps and expected state. Example:
+
+1. Go to the affected page.
+2. Type continuously while save/status text changes.
+3. Navigate away and back.
+4. Reload and confirm persisted state.
+
+Expected: typed text is not lost or reverted, caret/focus stays stable, no unexpected console/network errors occur, and saved state survives navigation/reload.
+
 ## Autopilot Notes
 
 - Leave `yalla-ready` only if this issue is eligible for queue dry-run selection.

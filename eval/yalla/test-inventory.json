@@ -81,6 +81,36 @@
       "notes": "No UI seam exists in this template. Add Playwright specs under tests/ and switch proof_mode to playwright once you have a frontend."
     },
     {
+      "category": "browser-interactions",
+      "description": "Browser-observable regressions that component tests often miss: caret jumps, lost typed text, stale save-state labels, SPA navigation durability, focus retention, and console/network errors.",
+      "deterministic_seam_available": true,
+      "proof_mode": "inconclusive",
+      "verdict": "INCONCLUSIVE",
+      "verification_strength": "missing",
+      "commands": [],
+      "existing_tests": [],
+      "coverage_gaps": [
+        "This template repo ships no browser app, so there is no caret/save/navigation flow to drive.",
+        "A real project would prove these with Playwright or an equivalent browser harness that types continuously through save cycles, asserts no text reverts, checks caret/focus stability, captures console/network errors, and reloads or navigates to confirm persisted state."
+      ],
+      "notes": "When a manual QA note says 'type while Saving... then Saved' or 'cursor jumps', prefer a browser-level regression over a shallow render test. If the repo lacks browser infra, record TEST_SEAM_BLOCKED or manual-smoke evidence instead of marking PROVEN."
+    },
+    {
+      "category": "task-tracking",
+      "description": "Issue tracker integration and autonomy handoff paths: GitHub Issues, Linear, DB-backed task tables, and file-only fallback.",
+      "deterministic_seam_available": true,
+      "proof_mode": "inconclusive",
+      "verdict": "INCONCLUSIVE",
+      "verification_strength": "missing",
+      "commands": [],
+      "existing_tests": [],
+      "coverage_gaps": [
+        "This template does not include a live tracker client test for GitHub or Linear.",
+        "A real project would prove: issue intake, status transitions, label/state eligibility, PR link writeback, proof verdict comments, and safe dry-run behavior without external mutation."
+      ],
+      "notes": "For Linear teams, map tracking_mode=linear to a deterministic adapter or dry-run transcript before scheduled autopilot."
+    },
+    {
       "category": "schema-migration",
       "description": "Database migrations, template schema, and schema/runtime coupling seams.",
       "deterministic_seam_available": true,

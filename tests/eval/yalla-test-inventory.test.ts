@@ -8,6 +8,8 @@ const completeCategories = [
   'async-jobs',
   'generated-artifacts',
   'ui-journeys',
+  'browser-interactions',
+  'task-tracking',
   'schema-migration',
 ] as const
 
@@ -16,7 +18,7 @@ function validEntry(category: (typeof completeCategories)[number]) {
     category,
     description: `${category} tests`,
     deterministic_seam_available: true,
-    proof_mode: category === 'ui-journeys' ? 'playwright' : 'existing-test',
+    proof_mode: category === 'ui-journeys' || category === 'browser-interactions' ? 'playwright' : 'existing-test',
     verdict: 'PROVEN',
     verification_strength: 'strong',
     commands: [`npm run test -- tests/${category}`],

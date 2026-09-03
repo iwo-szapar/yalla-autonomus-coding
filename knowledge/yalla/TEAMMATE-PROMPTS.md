@@ -101,7 +101,7 @@ Return only concrete failure modes:
 - How to mitigate it or what risk the user must accept
 - Whether the proposed explanation would let a non-engineer operator understand the decision, tradeoff, and recovery path without reading code
 
-Check security, payments, identity, async reliability, schema drift, generated artifacts, UI recovery, over-engineering, and code/doc mismatch only when relevant. Avoid vague objections.
+Check security, payments, identity, async reliability, schema drift, generated artifacts, UI recovery, browser interaction durability, over-engineering, and code/doc mismatch only when relevant. Avoid vague objections.
 ```
 
 ---

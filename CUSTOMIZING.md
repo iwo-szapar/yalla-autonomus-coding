@@ -47,6 +47,7 @@ The optional `verifiers:` block documents what proves success for each class of 
 verifiers:
   api: "npm test -- tests/api"
   ui: "npm run test:e2e"
+  browser_interactions: "npm run test:e2e -- --grep @browser-interaction"
   perf: "npm run benchmark"
   docs: "npm run docs:check"
   visual: ".pipeline/visual-evidence/"
@@ -60,9 +61,27 @@ These entries are planning/reporting hints. They make the verifier boundary expl
 
 ### Task Tracking
 
-`tracking_mode` is `github` (default), `file-only`, or `db`. `issue_id_format` is just how the pipeline names a unit of work (`issue-###`). Most projects never touch this. See [SETUP.md](SETUP.md) for when each mode applies.
+`tracking_mode` is `github` (default), `linear`, `file-only`, or `db`. `issue_id_format` is just how the pipeline names a unit of work (`issue-###`, `CAP-123`, or whatever your tracker uses). See [SETUP.md](SETUP.md) for when each mode applies.
 
 For GitHub mode, labels and issue shape matter. Use [`docs/onboarding/task-system.md`](docs/onboarding/task-system.md) to create the default `yalla-ready`, block, and priority labels and to seed an issue template.
+
+For Linear mode, keep the same Yalla proof contract but map it to Linear states instead of GitHub labels:
+
+```yaml
+tracking_mode: linear
+issue_id_format: "CAP-###"
+task_system:
+  provider: linear
+  team: CAP
+  project: "Marketing Website"
+  ready_states: [Ready, Selected]
+  in_progress_state: "In Progress"
+  review_state: "In Review"
+  blocked_state: "Needs Human"
+  done_state: Done
+```
+
+The operating rule is the same across trackers: intake the issue, write back the plan, move the task when work starts, attach the PR, and comment the final proof verdict. Scheduled automation should start in report-only/dry-run mode until those transitions are proven.
 
 ### Domain Mapping
 
@@ -103,6 +122,16 @@ risk_gates:
 ```
 
 The point of gates is proportionality. A docs typo should not be dragged through payment, migration, and auth review. A change to your billing code should be. List only the gates that match subsystems you actually have. The rest stay dormant — a gate that never triggers costs nothing, but a gate you don't need is noise.
+
+For browser-heavy products, add a browser-interaction verifier even if the component-test stack is weak. The tester should use the real browser seam for regressions like:
+
+- typing while autosave flips `Saving...` to `Saved`
+- caret/focus jumping during debounced state updates
+- text reverting after optimistic cache writes
+- SPA navigation away/back durability
+- console or network errors during the journey
+
+If the project has no Playwright/Cypress/Browser harness yet, the run should record `TEST_SEAM_BLOCKED` or a `manual-smoke` proof instead of pretending a shallow render test proves the behavior.
 
 ### Scope Mode Defaults
 
@@ -197,7 +226,7 @@ This is deliberate. A 1–10 score is unfalsifiable; two reviewers can disagree 
 
 It also means **the author never reviews their own code.** A reviewer answering "is there a SQL injection here?" with fresh eyes catches what the implementer, anchored on their own design, glosses over.
 
-The canonical check library — every binary check, its question, and its Fail criteria — is [`knowledge/yalla/REVIEW-CHECKS.md`](knowledge/yalla/REVIEW-CHECKS.md). The universal checks (security, correctness, test-evidence, reviewability, complexity) run on most diffs; the risk-triggered ones (payment, async, schema-migration, identity, email, generated-artifact, UI-journey) stay dormant until their subsystem is touched. Adopt the ones your project needs and leave the rest dormant.
+The canonical check library — every binary check, its question, and its Fail criteria — is [`knowledge/yalla/REVIEW-CHECKS.md`](knowledge/yalla/REVIEW-CHECKS.md). The universal checks (security, correctness, test-evidence, reviewability, complexity) run on most diffs; the risk-triggered ones (payment, async, schema-migration, identity, email, generated-artifact, UI-journey, browser-interaction) stay dormant until their subsystem is touched. Adopt the ones your project needs and leave the rest dormant.
 
 ## Writing a custom risk gate
 
@@ -228,7 +257,7 @@ Notice every line is checkable against the code. None of them say "handle errors
 `PROJECT-CHECKS.md` has two layers:
 
 - **Universal Baseline** — applied to every run, but only where the touched files make an item relevant. Items that don't apply are marked N/A, not invented into busywork. These are your always-on invariants: no hardcoded secrets, parameterized queries, responsive UI, correct import extensions.
-- **Risk-Triggered Checklist** — runs a block only when the diff or workflow matches its trigger. This is where the subsystem-specific scrutiny lives (payments, migrations, identity, email, generated artifacts, UI journeys).
+- **Risk-Triggered Checklist** — runs a block only when the diff or workflow matches its trigger. This is where the subsystem-specific scrutiny lives (payments, migrations, identity, email, generated artifacts, UI journeys, browser interactions).
 
 The split is what keeps review proportional. Baseline is cheap and universal; triggered checks are deep and rare.
 

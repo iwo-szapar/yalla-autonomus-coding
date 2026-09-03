@@ -156,6 +156,41 @@ commands:
     expect(result.checks).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'github_labels', status: 'pass', detail: 'Skipped for tracking_mode=file-only' })]))
   })
 
+  it('supports Linear tracking config without requiring GitHub labels', async () => {
+    const root = tempRoot()
+    mkdirSync(join(root, 'tests'))
+    writeConfig(root, `base_branch: main
+tracking_mode: linear
+test_dir: tests/
+commands:
+  test: "npm test"
+  typecheck: ""
+  build: "npm run build"
+  lint: "npm run lint"
+task_system:
+  provider: linear
+  team: CAP
+  ready_states: [Ready, Selected]
+  in_progress_state: "In Progress"
+  review_state: "In Review"
+  blocked_state: "Needs Human"
+  done_state: Done
+`)
+    const result = await runYallaOnboard({
+      command: 'check',
+      rootDir: root,
+      commandRunner: async (_command, args) => {
+        if (args[0] === 'auth') return { stdout: 'logged in', stderr: '', exitCode: 0 }
+        throw new Error('label list should not run for Linear tracking')
+      },
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.checks).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'tracking_mode', status: 'pass', detail: 'linear' })]))
+    expect(result.checks).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'task_system_provider', status: 'pass', detail: expect.stringContaining('Linear provider configured') })]))
+    expect(result.checks).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'github_labels', status: 'pass', detail: 'Skipped for tracking_mode=linear' })]))
+  })
+
   it('dashboard writes a visual onboarding html report', async () => {
     const root = tempRoot()
     mkdirSync(join(root, 'tests'))

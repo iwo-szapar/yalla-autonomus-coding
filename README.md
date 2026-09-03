@@ -2,7 +2,7 @@
 
 **Give Claude Code a one-line task. Get back a tested, reviewed pull request.**
 
-Yalla is an autonomous coding pipeline for [Claude Code](https://claude.com/claude-code). It turns a description into a planned, built, tested, reviewed, and shipped PR — using specialized agents and adaptive ceremony, **grounded in a project knowledge base** (your gotchas, risk checks, and architecture) and **held to a Proof Contract that a built-in eval harness grades**. A run only ships when evidence artifacts say it's proven. GitHub Issues are the task store; no database or external service required.
+Yalla is an autonomous coding pipeline for [Claude Code](https://claude.com/claude-code). It turns a description into a planned, built, tested, reviewed, and shipped PR — using specialized agents and adaptive ceremony, **grounded in a project knowledge base** (your gotchas, risk checks, and architecture) and **held to a Proof Contract that a built-in eval harness grades**. A run only ships when evidence artifacts say it's proven. GitHub Issues are the default task store; Linear, file-only, and DB-backed modes are configurable for teams with different workflows.
 
 ```
 /yalla add rate limiting to the public API
@@ -37,7 +37,7 @@ Two things wrap the linear pipeline and make it more than a prompt: the **knowle
 | Phase | What happens |
 |-------|--------------|
 | **0 · Minimum Diff + Classify** | Runs the minimum-diff ladder, then picks a `task_type`, risk tier, ceremony mode, evidence mode, and gates. A no-build/docs/config answer, one-line fix, and payment-flow change get different ceremony. |
-| **1 · Track** | Creates (or resumes) a GitHub issue and a worktree branch. |
+| **1 · Track** | Creates or resumes the configured tracker issue (GitHub by default, Linear when configured) and a worktree branch. |
 | **2 · Plan** | Researches the codebase, designs an approach, and adversarially challenges it. Bugs run a diagnosis gate first. You approve before any code is written. |
 | **3 · Work** | Builds in vertical slices — each one a thin, demoable end-to-end behavior — writing a failing behavior test at the highest correct seam before the implementation that passes it. |
 | **4 · Test** | Runs the suite until green, verifies every acceptance criterion maps to evidence, and records falsifiable verification (`VERIFIED` / `NOT VERIFIED` / `INCONCLUSIVE`). |
@@ -75,7 +75,7 @@ Ceremony modes (`lean` / `standard` / `strict`), evidence modes (`minimal` / `st
 
 ## Vertical slices and test seams
 
-Yalla builds in **tracer-bullet vertical slices** — each slice is a thin slice of real, demoable, end-to-end behavior, not a horizontal layer (no "all the models, then all the controllers"). For every acceptance criterion it writes one **failing behavior test at the highest correct seam** — the public interface a user or caller actually hits (route, endpoint, MCP tool, exported function) — *before* the implementation that makes it pass. Tests cross the public seam and mock only system boundaries; they don't reach into private internals just to satisfy a gate. If no correct seam exists, the run records `TEST_SEAM_BLOCKED` and halts for a decision instead of writing a shallow test.
+Yalla builds in **tracer-bullet vertical slices** — each slice is a thin slice of real, demoable, end-to-end behavior, not a horizontal layer (no "all the models, then all the controllers"). For every acceptance criterion it writes one **failing behavior test at the highest correct seam** — the public interface a user or caller actually hits (browser journey, route, endpoint, MCP/CLI tool, exported function) — *before* the implementation that makes it pass. Tests cross the public seam and mock only system boundaries; they don't reach into private internals just to satisfy a gate. Browser-only regressions such as lost typing during autosave, caret jumps, stale save labels, navigation durability, console errors, or failed network requests must be proven in the browser seam or recorded as `TEST_SEAM_BLOCKED`/`manual-smoke`, not replaced with a shallow render test. If no correct seam exists, the run records `TEST_SEAM_BLOCKED` and halts for a decision instead of writing a shallow test.
 
 ## `.pipeline/*` evidence artifacts
 
@@ -102,7 +102,7 @@ Artifacts are committed only when they explain non-obvious decisions, accepted r
 The pipeline engine is generic — what makes a run *yours* is the knowledge base in [`knowledge/yalla/`](knowledge/yalla/). It's read on demand at every phase and is the difference between a generic agent and one that knows your codebase:
 
 - **Your gotchas** — the non-obvious rules a new contributor trips on, loaded as hard constraints into every run (defined in your `YALLA.md`).
-- **Review checks** ([`REVIEW-CHECKS.md`](knowledge/yalla/REVIEW-CHECKS.md)) — the binary pass/fail library, including a risk-gate set (payments, migrations, auth, async, email, generated artifacts, UI) that arms only when the diff touches that subsystem.
+- **Review checks** ([`REVIEW-CHECKS.md`](knowledge/yalla/REVIEW-CHECKS.md)) — the binary pass/fail library, including a risk-gate set (payments, migrations, auth, async, email, generated artifacts, UI journeys, and browser interactions) that arms only when the diff touches that subsystem.
 - **Project checks, minimum-diff, task classification, test seams, vertical slices, architecture depth, diagnosis** — the methodology files that tell the agents *how* to scope, plan, build, and verify.
 
 It's also a **closed loop**: the **compound** phase routes each run's learnings back into the knowledge base and your `YALLA.md` gotchas, so the same mistake doesn't recur — the pipeline gets sharper the more you run it. A mature config (see [`examples/sbf/`](examples/sbf/)) carries a couple dozen earned gotchas and a full risk-gate map. An optional [**memory**](knowledge/yalla/MEMORY-PROTOCOL.md) subsystem can also persist those learnings to a project store and recall them before planning (off by default; enabled per-repo via a `memory:` block in `YALLA.md`).
@@ -165,6 +165,7 @@ Yalla also ships compact adapters modeled after the same single-source rule file
 - OpenCode: `.opencode/plugins/yalla.mjs` injects `hooks/yalla-instructions.cjs` each turn and supports `/yalla lean|standard|strict|off` mode persistence. Copy the plugin plus `hooks/yalla-*.cjs` together.
 - Gemini CLI: `gemini-extension.json` points at `AGENTS.md`.
 - Cursor, Windsurf, Cline, Copilot, Kiro: copy the matching rule file from this repo.
+- MCP-only hosts: `yalla-mcp/` exposes the compact instruction builder as a prompt/tool server without extra runtime dependencies.
 
 See [`docs/agent-portability.md`](docs/agent-portability.md). Run `npm run rules:check` before releasing adapter changes.
 
@@ -225,6 +226,7 @@ That's the whole adaptation. No code changes. See [`CUSTOMIZING.md`](CUSTOMIZING
 /yalla-review                   binary pass/fail review of the current diff
 /yalla-simplify                 deletion-only over-engineering review of the current diff
 /yalla-simplify-audit           repo-wide bloat audit
+/yalla-debt                     list yalla-min/minimum-diff shortcut markers
 /yalla-audit <issue-### | PR#>  post-mortem on a completed run
 /yalla issue-123                resume an interrupted run
 ```
@@ -248,7 +250,7 @@ npm run yalla:run -- export
 
 These commands are deliberately local and non-destructive. `resume` and `rewind` return the checkpoint and next action; they do not run destructive Git commands for you.
 
-Requires the [GitHub CLI](https://cli.github.com) (`gh auth login`) for default GitHub tracking. If you intentionally want no GitHub issue/PR workflow, set `tracking_mode: file-only` in `.claude/YALLA.md`.
+Requires the [GitHub CLI](https://cli.github.com) (`gh auth login`) for default GitHub tracking and PR creation. If Linear is your sprint board, set `tracking_mode: linear` and map `task_system` states in `.claude/YALLA.md`; GitHub still receives branches and PRs. If you intentionally want no external tracker, set `tracking_mode: file-only`.
 
 ## Components
 
@@ -256,6 +258,7 @@ Requires the [GitHub CLI](https://cli.github.com) (`gh auth login`) for default 
 - **Agents** (`agents/`) — the specialists: lead (orchestrator), implementer, tester, reviewer.
 - **Knowledge** (`knowledge/yalla/`) — pipeline mechanics (classification, diagnosis, vertical slices, test seams, artifacts, agent brief, preflight) plus the customizable check definitions in `REVIEW-CHECKS.md` and `PROJECT-CHECKS.md`.
 - **Eval harness** (`eval/yalla/`) — the runnable proof-contract / test-inventory / outcome-quality suites and their fixtures. Repo-root only.
+- **Benchmarks** (`benchmarks/yalla/`) — methodology for agentic baseline-vs-Yalla measurement.
 - **Onboarding docs** (`docs/onboarding/`) — what each repo needs: config, labels, issue shape, project checks, and eval fixtures.
 - **Autopilot docs** (`docs/autopilot/`) — staged scheduler/readiness guidance for moving from local dry-run to PR-only automation.
 

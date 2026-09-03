@@ -6,6 +6,8 @@ export const inventoryCategorySchema = z.enum([
   'async-jobs',
   'generated-artifacts',
   'ui-journeys',
+  'browser-interactions',
+  'task-tracking',
   'schema-migration',
 ])
 
