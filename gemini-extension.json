@@ -1,6 +1,6 @@
 {
   "name": "yalla",
   "version": "1.4.0",
-  "description": "Proof-first autonomous coding pipeline with minimum-diff discipline and binary review.",
+  "description": "Proof-first autonomous coding pipeline with minimum-diff discipline, binary review, and optional visual decision support.",
   "contextFileName": "AGENTS.md"
 }

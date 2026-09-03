@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add `/yalla-show`: optional, smallest-accurate visual explanations of a plan, diff, workflow, decision, or proof gap.
+- Add `knowledge/yalla/VISUAL-EXPLAINABILITY.md` and wire it into Yalla planning and review without allowing diagrams to substitute for deterministic proof.
 - Add a first-class minimum-diff gate (`knowledge/yalla/MINIMUM-DIFF.md`) and wire it into `/yalla` classification, plan templates, and PR summaries.
 - Add `/yalla-simplify` and `/yalla-simplify-audit` for deletion-only diff and repo bloat reviews.
 - Add cross-agent adapters for OpenCode, Codex, Gemini CLI, Cursor, Windsurf, Cline, Copilot, and Kiro, all aligned to `AGENTS.md` via `npm run rules:check`.

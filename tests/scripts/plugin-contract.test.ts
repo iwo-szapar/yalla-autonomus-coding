@@ -108,6 +108,7 @@ describe('Claude Code plugin contract', () => {
     expect(skillFiles.length).toBeGreaterThanOrEqual(7)
     const names = skillFiles.map((path) => parseFrontmatter(path).name)
     expect(new Set(names).size).toBe(names.length)
+    expect(names).toContain('yalla-show')
 
     for (const path of skillFiles) {
       const frontmatter = parseFrontmatter(path)
@@ -170,6 +171,7 @@ describe('Claude Code plugin contract', () => {
 
     expect(readFileSync(join(target, '.claude/YALLA.md'), 'utf8')).toBe('repo: "kept/config"\n')
     expect(existsSync(join(target, '.claude/skills/yalla/SKILL.md'))).toBe(true)
+    expect(existsSync(join(target, '.claude/skills/yalla-show/SKILL.md'))).toBe(true)
     expect(existsSync(join(target, '.claude/agents/yalla-lead.md'))).toBe(true)
     expect(existsSync(join(target, '.claude/knowledge/yalla/PROJECT-CHECKS.md'))).toBe(true)
     expect(existsSync(join(target, '.claude/knowledge/product/PRODUCT-INTENT-FRAMEWORK.md'))).toBe(true)

@@ -34,4 +34,4 @@ Rules:
 
 Never minimize away input validation at trust boundaries, auth/access/privacy, data-loss error handling, accessibility basics, deterministic proof, or anything explicitly requested.
 
-Use `/yalla` for full pipeline work, `/yalla-review` for binary pass/fail review, `/yalla-simplify` for deletion-only diff review, `/yalla-simplify-audit` for repo-wide bloat audits, and `/yalla-debt` for the simplification ledger.
+Use `/yalla` for full pipeline work, `/yalla-review` for binary pass/fail review, `/yalla-show` for a smallest-accurate visual explanation, `/yalla-simplify` for deletion-only diff review, `/yalla-simplify-audit` for repo-wide bloat audits, and `/yalla-debt` for the simplification ledger.

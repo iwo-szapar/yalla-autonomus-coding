@@ -88,6 +88,7 @@ A run leaves a trail under `.pipeline/` so a reviewer can decide where to look c
 - `goal-contract.json` — desired end state, success criteria, constraints, budget, forbidden shortcuts, and required evidence.
 - `evaluator-results.json` / `loop-state.json` — independent evaluator verdicts and long-running loop decisions.
 - `visual-evidence/` / `benchmarks.json` — optional screenshot, image, and benchmark evidence rendered into the local report.
+- `plans/active/issue-###-visual.html` — optional decision support for an ambiguous plan or cross-boundary change; it explains the work but never substitutes for proof evidence.
 - `acceptance-trace.json` — every criterion, its proof mode, and its evidence status.
 - `test-evidence.json` — commands run, pass/fail, falsifiable claim verdicts, smoke evidence.
 - `external-grounding.json` / `runtime-e2e-preflight.json` — conditional source grounding and environment proof boundaries.
@@ -181,8 +182,8 @@ Either way you end up with:
 
 ```
 your-project/.claude/
-├── skills/            yalla, yalla-plan, yalla-review, yalla-simplify,
-│                      yalla-simplify-audit, yalla-team, yalla-audit
+├── skills/            yalla, yalla-plan, yalla-review, yalla-show,
+│                      yalla-simplify, yalla-simplify-audit, yalla-team, yalla-audit
 ├── agents/            yalla-lead, yalla-implementer, yalla-tester, yalla-reviewer
 ├── knowledge/yalla/   pipeline mechanics (classification, diagnosis, slices,
 │                      seams, artifacts, review checks) + your project checks
@@ -224,6 +225,7 @@ That's the whole adaptation. No code changes. See [`CUSTOMIZING.md`](CUSTOMIZING
 /yalla-team <what to build>     full multi-agent team (heavier, for complex work)
 /yalla-plan <what to build>     just the adversarial plan
 /yalla-review                   binary pass/fail review of the current diff
+/yalla-show <plan | diff | flow> smallest useful visual explanation and proof-status handoff
 /yalla-simplify                 deletion-only over-engineering review of the current diff
 /yalla-simplify-audit           repo-wide bloat audit
 /yalla-debt                     list yalla-min/minimum-diff shortcut markers

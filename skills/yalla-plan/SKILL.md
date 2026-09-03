@@ -16,6 +16,12 @@ Planning must be incident-aware without becoming a universal checklist. Identify
 
 Planning must also be operator-readable for non-trivial work. Apply the operator-understanding protocol (see `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/`) and choose `light`, `default`, or `deep` understanding mode based on risk. The plan should explain the business/user behavior before code details.
 
+When the chosen approach, a cross-boundary flow, or the tradeoff between two
+options would otherwise require the operator to reconstruct it from prose, use
+`/yalla-show` and `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/VISUAL-EXPLAINABILITY.md`.
+Choose the smallest accurate view and state its proof status; the visual is not
+itself acceptance evidence.
+
 `$REPO` and `$BASE_BRANCH` come from `.claude/YALLA.md` (`repo:` / `base_branch:`), with `$REPO` auto-detected via `gh repo view --json nameWithOwner -q .nameWithOwner` when blank and `$BASE_BRANCH` defaulting to `main`.
 
 ## Input

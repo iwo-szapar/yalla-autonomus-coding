@@ -1,7 +1,7 @@
 {
   "name": "yalla",
   "version": "1.4.0",
-  "description": "Autonomous coding pipeline for Claude Code with guided onboarding dashboard: minimum-diff -> onboard -> track -> plan -> work -> test -> review -> compound -> ship. Multi-agent planning, proof contracts, and binary review gates.",
+  "description": "Autonomous coding pipeline for Claude Code with guided onboarding dashboard: minimum-diff -> onboard -> track -> plan -> work -> test -> review -> compound -> ship. Multi-agent planning, proof contracts, binary review gates, and optional visual decision support.",
   "author": {
     "name": "Iwo Szapar"
   },
