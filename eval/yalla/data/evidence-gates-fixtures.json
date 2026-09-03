@@ -72,7 +72,8 @@
       "runtime_e2e_preflight": {
         "applies": true,
         "environment": "preview",
-        "base_ref": "main",
+        "base_ref": "main@abc123",
+        "target_ref": "preview@def456",
         "skip_classification": "unresolved-proof-gap",
         "status": "blocked"
       }
@@ -82,6 +83,7 @@
         "applies": true,
         "environment": "preview",
         "base_ref": "main@abc123",
+        "target_ref": "preview@def456",
         "required_shape": ["test account present"],
         "mutation_guardrails": ["No production writes"],
         "skip_classification": "intentional-guard-skip",

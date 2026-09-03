@@ -19,7 +19,8 @@ describe('Yalla evidence gates', () => {
       runtime_e2e_preflight: {
         applies: true,
         environment: 'preview',
-        base_ref: 'main',
+        base_ref: 'main@abc123',
+        target_ref: 'preview@def456',
         skip_classification: 'unresolved-proof-gap',
         status: 'blocked',
       },
@@ -29,11 +30,83 @@ describe('Yalla evidence gates', () => {
     expect(violations.map(violation => violation.message)).toContain('An unresolved runtime proof gap cannot support PROVEN.')
   })
 
+  it('rejects blocked runtime evidence even when it names a claim and target revision', () => {
+    const violations = validateEvidenceGates({
+      runtime_e2e_preflight: {
+        applies: true,
+        environment: 'preview',
+        base_ref: 'main@abc123',
+        target_ref: 'preview@def456',
+        skip_classification: 'none',
+        proves: ['Preview route renders the provider error.'],
+        status: 'blocked',
+      },
+    })
+
+    expect(violations).toContainEqual({
+      path: 'runtime_e2e_preflight.status',
+      message: 'Applicable runtime E2E proof must pass before it can support PROVEN.',
+    })
+  })
+
+  it('rejects a present runtime target that is not bound to an immutable revision', () => {
+    const violations = validateEvidenceGates({
+      runtime_e2e_preflight: {
+        applies: true,
+        environment: 'preview',
+        base_ref: 'main@abc123',
+        target_ref: 'preview',
+        skip_classification: 'none',
+        proves: ['Preview route renders the provider error.'],
+        status: 'pass',
+      },
+    })
+
+    expect(violations.some(violation => violation.path === 'runtime_e2e_preflight.target_ref')).toBe(true)
+  })
+
+  it('requires intentional guard skips to name the behavior excluded from proof', () => {
+    const violations = validateEvidenceGates({
+      runtime_e2e_preflight: {
+        applies: true,
+        environment: 'preview',
+        base_ref: 'main@abc123',
+        target_ref: 'preview@def456',
+        skip_classification: 'intentional-guard-skip',
+        proves: ['Preview route renders.'],
+        status: 'pass',
+      },
+    })
+
+    expect(violations).toContainEqual({
+      path: 'runtime_e2e_preflight.does_not_prove',
+      message: 'An intentional guard skip must name the behavior excluded from the proof claim.',
+    })
+  })
+
+  it('rejects applicable UI proof that did not exclude sensitive data', () => {
+    const violations = validateEvidenceGates({
+      ui_proof: {
+        applies: true,
+        revision: 'def456',
+        assertions: ['The expected error appears.'],
+        artifacts: ['.artifacts/issue-44/error.png'],
+        sensitive_data_excluded: false,
+        external_upload: false,
+      },
+    })
+
+    expect(violations).toContainEqual({
+      path: 'ui_proof.sensitive_data_excluded',
+      message: 'Applicable UI proof must set sensitive_data_excluded to true.',
+    })
+  })
+
   it('requires generative evidence only for the gates that apply', () => {
     const violations = validateEvidenceGates({
       surface_parity: { applies: true, reason: 'new API route', family: 'API routes' },
       trust_map: { applies: false, reason: 'no external input or output' },
-      volume_envelope: { applies: false, reason: 'constant-size local operation', busiest_case: 'n/a', cost_math: 'n/a' },
+      volume_envelope: { applies: false, reason: 'constant-size local operation' },
       lifecycle_states: { applies: false, reason: 'no stateful provider object' },
     })
 
@@ -54,6 +127,7 @@ describe('Yalla evidence gates', () => {
         applies: true,
         environment: 'preview',
         base_ref: 'main@abc123',
+        target_ref: 'preview@def456',
         required_shape: ['test account present'],
         mutation_guardrails: ['No production writes.'],
         skip_classification: 'intentional-guard-skip',

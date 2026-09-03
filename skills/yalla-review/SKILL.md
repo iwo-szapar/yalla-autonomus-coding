@@ -31,6 +31,8 @@ git diff "$BASE_BRANCH"
 
 Also read `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARTIFACTS.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/EVIDENCE-GATES.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/TEST-SEAMS.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARCHITECTURE-DEPTH.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/PROJECT-CHECKS.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/REVIEW-CHECKS.md`, and `${CLAUDE_PLUGIN_ROOT}/knowledge/product/INTENDED-VS-IMPLEMENTED.md` before launching reviewers.
 
+Read `.pipeline/classification.json` and `.pipeline-state.json` when present. Treat their persisted `required_gates` as a floor: final `review_evidence.required_checks` must retain every armed evidence check, and the corresponding evidence gate must remain applicable. Planning or review may add gates but must not silently downgrade one to N/A.
+
 ## Step 2: Launch Reviewers
 
 ### Always run:
@@ -179,7 +181,7 @@ Use the full binary definitions in `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/REVIEW
 
 **external-grounding-check:** Run when external API, SDK, provider, protocol, browser/platform behavior, or generated setup instructions determine a behavior claim. Verify authoritative current sources and implementation consequences.
 
-**runtime-e2e-proof-check:** Run when preview, staging, production, remote, or other real-environment proof is claimed. Verify target/base revision, safe environment shape, guardrails, inherited failures, and proves/does-not-prove limits.
+**runtime-e2e-proof-check:** Run when preview, staging, production, remote, or other real-environment proof is claimed. Verify the deployed target revision and base revision, safe environment shape, guardrails, inherited failures, and proves/does-not-prove limits.
 
 **surface-parity-check:** Run for a new/ported API, CLI, job, webhook, cron, or public entrypoint. Verify at least two siblings and explicit treatment of inherited auth, rate, error, telemetry, time, and header behavior.
 

@@ -86,6 +86,7 @@ Write to `plans/active/issue-###-[slug].md`, plus `plans/active/issue-###.plan.j
 - Product intent gate: [applies|n/a and why]
 - External grounding gate: [applies|n/a and concrete trigger]
 - Runtime E2E gate: [applies|n/a and concrete trigger]
+- Generative evidence gates: [surface parity, trust map, volume envelope, lifecycle states, and UI proof — each applies/N/A with a concrete reason]
 
 ## Domain Language
 - [Canonical project terms from your conventions doc (CLAUDE.md / AGENTS.md), .claude/YALLA.md, docs]

@@ -118,6 +118,19 @@ describe('Claude Code plugin contract', () => {
     }
   })
 
+  it('arms every portable evidence gate during Yalla classification', () => {
+    const yallaSkill = readFileSync(join(repoRoot, 'skills/yalla/SKILL.md'), 'utf8')
+    const yallaReviewSkill = readFileSync(join(repoRoot, 'skills/yalla-review/SKILL.md'), 'utf8')
+
+    expect(yallaSkill).toContain('Determine `external_grounding_gate`')
+    expect(yallaSkill).toContain('Determine `runtime_e2e_gate`')
+    expect(yallaSkill).toContain('Determine `evidence_gate_requirements`')
+    expect(yallaSkill).toContain('Record every gate as `applies` or `n/a` with a concrete reason.')
+    expect(yallaSkill).toContain('add its matching `surface-parity-check`, `trust-map-check`, `volume-envelope-check`, `lifecycle-state-check`, or `ui-proof-check` to `required_gates`')
+    expect(yallaSkill).toContain('add the same fields, gate decisions, and reasons to `.pipeline-state.json`')
+    expect(yallaReviewSkill).toContain('Treat their persisted `required_gates` as a floor')
+  })
+
   it('validates agent frontmatter and unique names', () => {
     const agentFiles = listFiles(join(repoRoot, 'agents'), (path) => path.endsWith('.md'))
     const names = agentFiles.map((path) => parseFrontmatter(path).name)

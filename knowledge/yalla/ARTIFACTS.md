@@ -35,6 +35,13 @@ Tiny hotfixes may use minimal evidence mode: no committed `.pipeline/*` artifact
   "external_grounding_gate_reason": "Uses provider retry semantics",
   "runtime_e2e_gate": "applies|n/a",
   "runtime_e2e_gate_reason": "PR claims preview-environment evidence",
+  "evidence_gate_requirements": {
+    "surface_parity": { "status": "applies|n/a", "reason": "Adds a public API route" },
+    "trust_map": { "status": "applies|n/a", "reason": "Consumes an untrusted display name" },
+    "volume_envelope": { "status": "applies|n/a", "reason": "Makes one provider call per record" },
+    "lifecycle_states": { "status": "applies|n/a", "reason": "Consumes provider job states" },
+    "ui_proof": { "status": "applies|n/a", "reason": "Changes a user-visible error state" }
+  },
   "merge_policy": "pr-only"
 }
 ```
@@ -73,11 +80,11 @@ Tiny hotfixes may use minimal evidence mode: no committed `.pipeline/*` artifact
     {"risk": "...", "resolution": "mitigated|accepted|user-decision"}
   ],
   "evidence_gates": {
-    "surface_parity": "applies|n/a",
-    "trust_map": "applies|n/a",
-    "volume_envelope": "applies|n/a",
-    "lifecycle_states": "applies|n/a",
-    "ui_proof": "applies|n/a"
+    "surface_parity": { "status": "applies|n/a", "reason": "..." },
+    "trust_map": { "status": "applies|n/a", "reason": "..." },
+    "volume_envelope": { "status": "applies|n/a", "reason": "..." },
+    "lifecycle_states": { "status": "applies|n/a", "reason": "..." },
+    "ui_proof": { "status": "applies|n/a", "reason": "..." }
   }
 }
 ```
@@ -197,6 +204,7 @@ Required before a run claims preview, staging, production, remote, or another re
   "applies": true,
   "environment": "preview",
   "base_ref": "main@abc123",
+  "target_ref": "preview@def456",
   "required_shape": ["test account present"],
   "mutation_guardrails": ["No production writes"],
   "skip_classification": "none|intentional-guard-skip|unresolved-proof-gap",
@@ -207,7 +215,7 @@ Required before a run claims preview, staging, production, remote, or another re
 }
 ```
 
-An `unresolved-proof-gap` means the corresponding promise cannot be marked `PROVEN`. An intentional guard skip is valid only when the skipped behavior is excluded from the PR promise.
+`base_ref` and `target_ref` use `<target>@<revision>` and must identify the immutable base and deployed target revision being exercised. An `unresolved-proof-gap` or any status other than `pass` means the corresponding promise cannot be marked `PROVEN`. An intentional guard skip is valid only when `does_not_prove` names the skipped behavior and that behavior is excluded from the PR promise.
 
 ### `.pipeline/progress.md`
 
@@ -364,7 +372,7 @@ Required before shipping. This is the final proof-contract artifact that decides
 
 Verdict rules:
 
-- `PROVEN` requires every acceptance criterion to be covered by valid evidence, every required review check to pass, all required commands to pass, and no remaining delta.
+- `PROVEN` requires every acceptance criterion to be covered by valid evidence, the persisted classification `required_gates` to remain a subset of final required review checks, an applicable or concrete N/A decision for every portable evidence gate, every required review check to pass, all required commands to pass, and no remaining delta.
 - `NOT_PROVEN` means evidence or review disproves the issue promise.
 - `INCONCLUSIVE` means proof is blocked or external evidence is unavailable. It does not count as complete or safe for autopilot progression.
 

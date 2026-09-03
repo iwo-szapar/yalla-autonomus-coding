@@ -69,7 +69,7 @@ Run for external APIs, SDKs, providers, protocols, browser/platform behavior, or
 Run for preview, staging, production, remote, or other real-environment evidence.
 
 **Fail criteria:**
-- Target environment or base revision is absent
+- Deployed target revision, target environment, or base revision is absent
 - Environment/data shape or mutation guardrails expose secrets/customer data or are missing
 - Baseline failures are silently attributed to the change
 - `unresolved-proof-gap` or an untested behavior is presented as `PROVEN`

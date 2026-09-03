@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { evidenceGatesSchema, validateEvidenceGates } from './evidence-gates.js'
+import { evidenceGatesSchema, validateEvidenceGates, type EvidenceGates } from './evidence-gates.js'
 
 export const proofModeSchema = z.enum([
   'existing-test',
@@ -44,6 +44,10 @@ export const reviewCheckSchema = z.object({
   findings: z.array(z.string()).default([]),
 })
 
+const classificationEvidenceSchema = z.object({
+  required_gates: z.array(z.string().min(1)),
+})
+
 export const proofContractRunSchema = z.object({
   issue_id: z.string().regex(/^issue-\d+$/),
   issue_intent: z.object({
@@ -68,6 +72,7 @@ export const proofContractRunSchema = z.object({
       )
       .default([]),
   }),
+  classification_evidence: classificationEvidenceSchema.optional(),
   evidence_gates: evidenceGatesSchema.optional(),
   outcome: z.object({
     verdict: outcomeVerdictSchema,
@@ -94,6 +99,18 @@ export type ProofContractValidation = {
 }
 
 const checkoutSurfaces = ['src/pages/CheckoutPage.tsx', 'src/pages/PublicProduct.tsx']
+
+const evidenceGateForReviewCheck = {
+  'external-grounding-check': 'external_grounding',
+  'runtime-e2e-proof-check': 'runtime_e2e_preflight',
+  'surface-parity-check': 'surface_parity',
+  'trust-map-check': 'trust_map',
+  'volume-envelope-check': 'volume_envelope',
+  'lifecycle-state-check': 'lifecycle_states',
+  'ui-proof-check': 'ui_proof',
+} as const satisfies Record<string, keyof EvidenceGates>
+
+const evidenceGateNames = Object.values(evidenceGateForReviewCheck)
 
 function addViolation(violations: ProofContractViolation[], path: string, message: string) {
   violations.push({ path, message })
@@ -166,8 +183,83 @@ export function validateProofContract(input: unknown): ProofContractValidation {
     }
   }
 
+  if (run.outcome.verdict === 'PROVEN') {
+    if (!run.classification_evidence) {
+      addViolation(
+        violations,
+        'classification_evidence',
+        'PROVEN requires the persisted classification required_gates so later review cannot silently drop an armed gate.'
+      )
+    }
+
+    for (const gateName of evidenceGateNames) {
+      if (!run.evidence_gates?.[gateName]) {
+        addViolation(
+          violations,
+          `evidence_gates.${gateName}`,
+          `PROVEN requires an explicit ${gateName} decision: applicable evidence or a concrete N/A reason.`
+        )
+      }
+    }
+
+    for (const requiredCheck of run.review_evidence.required_checks) {
+      const gateName = evidenceGateForReviewCheck[requiredCheck as keyof typeof evidenceGateForReviewCheck]
+      if (!gateName) continue
+
+      const gate = run.evidence_gates?.[gateName]
+      if (!gate) {
+        continue
+      } else if (!gate.applies) {
+        addViolation(
+          violations,
+          `evidence_gates.${gateName}.applies`,
+          `${requiredCheck} is required, so its evidence gate cannot be marked N/A for PROVEN.`
+        )
+      }
+    }
+
+    for (const requiredCheck of Object.keys(evidenceGateForReviewCheck) as Array<keyof typeof evidenceGateForReviewCheck>) {
+      const gateName = evidenceGateForReviewCheck[requiredCheck]
+      const classifiedAsRequired = run.classification_evidence?.required_gates.includes(requiredCheck) ?? false
+      const reviewedAsRequired = run.review_evidence.required_checks.includes(requiredCheck)
+      const gateApplies = run.evidence_gates?.[gateName]?.applies ?? false
+
+      if (classifiedAsRequired && !reviewedAsRequired) {
+        addViolation(
+          violations,
+          'review_evidence.required_checks',
+          `${requiredCheck} was armed during classification and cannot be dropped before PROVEN.`
+        )
+      }
+      if (classifiedAsRequired && !gateApplies) {
+        addViolation(
+          violations,
+          `evidence_gates.${gateName}.applies`,
+          `${requiredCheck} was armed during classification, so its evidence gate cannot be marked N/A for PROVEN.`
+        )
+      }
+      if (gateApplies && !reviewedAsRequired) {
+        addViolation(
+          violations,
+          'review_evidence.required_checks',
+          `Applicable ${gateName} evidence requires ${requiredCheck} before PROVEN.`
+        )
+      }
+      if ((gateApplies || reviewedAsRequired) && !classifiedAsRequired) {
+        addViolation(
+          violations,
+          'classification_evidence.required_gates',
+          `${requiredCheck} became applicable after classification and must be persisted before PROVEN.`
+        )
+      }
+    }
+  }
+
   if (run.evidence_gates) {
-    for (const violation of validateEvidenceGates(run.evidence_gates)) {
+    const evidenceGateViolations = validateEvidenceGates(run.evidence_gates, {
+      requireReadyForProven: run.outcome.verdict === 'PROVEN',
+    })
+    for (const violation of evidenceGateViolations) {
       addViolation(violations, `evidence_gates.${violation.path}`, violation.message)
     }
   }

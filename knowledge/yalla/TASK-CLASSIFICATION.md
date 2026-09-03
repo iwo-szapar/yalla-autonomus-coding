@@ -35,6 +35,17 @@ Write the classification into `.pipeline/classification.json` and `.pipeline-sta
   "product_intent_gate_reason": "...",
   "architecture_doc_gate": "applies|n/a",
   "architecture_doc_gate_reason": "...",
+  "external_grounding_gate": "applies|n/a",
+  "external_grounding_gate_reason": "...",
+  "runtime_e2e_gate": "applies|n/a",
+  "runtime_e2e_gate_reason": "...",
+  "evidence_gate_requirements": {
+    "surface_parity": { "status": "applies|n/a", "reason": "..." },
+    "trust_map": { "status": "applies|n/a", "reason": "..." },
+    "volume_envelope": { "status": "applies|n/a", "reason": "..." },
+    "lifecycle_states": { "status": "applies|n/a", "reason": "..." },
+    "ui_proof": { "status": "applies|n/a", "reason": "..." }
+  },
   "base_branch": "main",
   "merge_policy": "pr-only|auto-merge-approved"
 }
@@ -62,6 +73,12 @@ Set `product_intent_gate: "applies"` when the task changes product/GTM/user-flow
 Set `product_intent_gate: "n/a"` only with a concrete reason, such as `internal refactor preserving public behavior` or `test-only change with no product promise change`.
 
 When the gate applies, the plan must include `Product Intent`, approval must preserve the MVP boundary, and review must run `intended-vs-implemented-check`.
+
+## Evidence Gate Classification
+
+Before planning, make an explicit applicability decision for external grounding, runtime E2E, surface parity, trust mapping, volume envelope, lifecycle states, and UI proof. Every decision must be `applies` or `n/a` with a concrete reason; do not omit gates that appear irrelevant.
+
+When a gate applies, add its matching check to `required_gates`: `external-grounding-check`, `runtime-e2e-proof-check`, `surface-parity-check`, `trust-map-check`, `volume-envelope-check`, `lifecycle-state-check`, or `ui-proof-check`. Planning may refine the reason or evidence boundary, but it may not silently remove an applicable gate.
 
 If more than one type matches, choose the riskiest applicable path:
 

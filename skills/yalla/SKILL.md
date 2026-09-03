@@ -186,9 +186,16 @@ Classify the task before planning:
 11. Determine `product_intent_gate`:
    - `applies` if the task changes product behavior, user/admin/operator journeys, GTM/pricing/positioning surfaces, money, access, entitlements, delivery, onboarding, public product pages, generated artifacts, or agent workflows that decide what gets built.
    - `n/a` for tiny hotfixes, isolated tests, dependency/config updates, mechanical refactors, or docs edits that do not define future product behavior. Include a specific reason.
-12. Write `.pipeline/classification.json` and add the same fields to `.pipeline-state.json`.
-13. Write or update `.pipeline/goal-contract.json` with success criteria, constraints, budget, forbidden shortcuts, and required evidence.
-14. Record the phase in `.pipeline/events.jsonl` and checkpoint with phase `classify`.
+12. Determine `external_grounding_gate`:
+   - `applies` when the task depends on an external API, SDK, provider, protocol, browser/platform behavior, or generated setup instructions. Add `external-grounding-check` to `required_gates`.
+   - `n/a` only with a concrete reason naming why no external behavior is relied upon.
+13. Determine `runtime_e2e_gate`:
+   - `applies` when preview, staging, production, remote, or other real-environment evidence will be needed or claimed. Add `runtime-e2e-proof-check` to `required_gates`.
+   - `n/a` only with a concrete reason naming why local/static proof is sufficient.
+14. Determine `evidence_gate_requirements` for `surface_parity`, `trust_map`, `volume_envelope`, `lifecycle_states`, and `ui_proof`. Record every gate as `applies` or `n/a` with a concrete reason. For each applicable gate, add its matching `surface-parity-check`, `trust-map-check`, `volume-envelope-check`, `lifecycle-state-check`, or `ui-proof-check` to `required_gates`.
+15. Write `.pipeline/classification.json` and add the same fields, gate decisions, and reasons to `.pipeline-state.json`.
+16. Write or update `.pipeline/goal-contract.json` with success criteria, constraints, budget, forbidden shortcuts, and required evidence.
+17. Record the phase in `.pipeline/events.jsonl` and checkpoint with phase `classify`.
 
 ### Conditional routing
 
@@ -285,7 +292,7 @@ git worktree add -b "session/issue-$ISSUE_NUMBER-$SLUG" ".claude/worktrees/issue
 
 If already in a Claude Code worktree flow, use the equivalent worktree-entry mechanism.
 
-State must include `issue_number`, `issue_url`, `branch`, `task_type`, `scope_mode`, `required_gates`, `phase_split_required`, `risk_tier`, `evidence_mode`, `ceremony_mode`, `minimum_diff_decision`, `architecture_doc_gate`, `architecture_doc_gate_reason`, `product_intent_gate`, `product_intent_gate_reason`, `merge_policy`, and `phase: "1-plan"`. It must not introduce a parallel ID scheme outside `issue-###`.
+State must include `issue_number`, `issue_url`, `branch`, `task_type`, `scope_mode`, `required_gates`, `phase_split_required`, `risk_tier`, `evidence_mode`, `ceremony_mode`, `minimum_diff_decision`, `architecture_doc_gate`, `architecture_doc_gate_reason`, `product_intent_gate`, `product_intent_gate_reason`, `external_grounding_gate`, `external_grounding_gate_reason`, `runtime_e2e_gate`, `runtime_e2e_gate_reason`, `evidence_gate_requirements`, `merge_policy`, and `phase: "1-plan"`. It must not introduce a parallel ID scheme outside `issue-###`.
 
 ---
 
@@ -389,6 +396,7 @@ Plan structure:
 - Ceremony mode: [lean|standard|strict]
 - External grounding: [applies/N/A and concrete trigger]
 - Runtime E2E preflight: [applies/N/A and concrete trigger]
+- Generative evidence gates: [surface parity, trust map, volume envelope, lifecycle states, and UI proof — each applies/N/A with a concrete reason]
 
 ## Minimum Diff Gate
 - Selected rung: [no-build|config-docs|existing-code|stdlib-native|installed-dependency|one-local-change|new-implementation]
@@ -593,7 +601,7 @@ After user approval:
    - CLI/TUI/script behavior -> use a deterministic local harness or transcript; clean up temporary sessions and artifacts.
    - Measurable claims -> restate the claim in falsifiable form and capture baseline/treatment evidence when feasible.
    - Core user workflows -> run or define the closest end-to-end path the user would manually check. If automation is missing, either add a focused test or record the manual-validation gap as risk.
-   - Real-environment claims -> complete `.pipeline/runtime-e2e-preflight.json` before the run; record base revision, safe data shape, mutation guardrails, inherited failures, and exactly what the run proves and does not prove.
+   - Real-environment claims -> complete `.pipeline/runtime-e2e-preflight.json` before the run; record the deployed target revision and base revision, safe data shape, mutation guardrails, inherited failures, and exactly what the run proves and does not prove. Only `status: pass` can support `PROVEN`.
 8. Run targeted tests after each meaningful chunk.
 9. Run the project's `typecheck` and `build` commands (from `.claude/YALLA.md` `commands:`) where relevant.
    - On failure, group errors by file/category before editing.
@@ -626,7 +634,7 @@ Security self-check: input validation, SQL safety, auth boundaries, CSP/sanitiza
 14. Write `.pipeline/test-evidence.json` with commands, status, seam blockers, claim verification, smoke evidence, and architecture-doc alignment status when the evidence is non-obvious or needs to be committed. Otherwise summarize the same evidence in the PR body.
 15. If evidence is missing, blocked, or inconclusive, set the eventual outcome to `NOT_PROVEN` or `INCONCLUSIVE`; do not call the work complete.
 16. Update `.pipeline-state.json` to `phase: "4-review"`, `test_status: "passing"` only when required test commands passed. Otherwise record the blocker.
-17. For each applicable Evidence Gate, validate the required enumeration and link it from the acceptance trace or PR body. Treat an unresolved external-grounding or runtime-E2E gap as `NOT_PROVEN`/`INCONCLUSIVE`, never as green evidence.
+17. Re-read the persisted classification `required_gates`. Final review must retain every armed evidence check and keep its corresponding evidence gate applicable; planning/review may add gates but must not silently downgrade one to N/A. Validate each applicable gate's required enumeration and link it from the acceptance trace or PR body. Treat an unresolved external-grounding or runtime-E2E gap as `NOT_PROVEN`/`INCONCLUSIVE`, never as green evidence.
 
 Validation evidence should be reviewer-digestible. For UI, workflow, or integration changes, include screenshots, trace links, HTTP transcripts, console/network summaries, or command output excerpts that prove the behavior without requiring the user to rerun everything.
 
@@ -687,7 +695,7 @@ For structural changes:
 Evidence-triggered checks:
 
 - **external-grounding-check (conditional):** Are external behavior claims grounded in current official/upstream evidence, with the source consequences reflected in code and tests?
-- **runtime-e2e-proof-check (conditional):** Does every real-environment run declare target/base revision, safe shape, guardrails, inherited failures, and exact proves/does-not-prove boundaries?
+- **runtime-e2e-proof-check (conditional):** Does every real-environment run declare the deployed target revision and base revision, safe shape, guardrails, inherited failures, and exact proves/does-not-prove boundaries?
 - **surface-parity-check (conditional):** Does a new/ported public entrypoint enumerate two nearest siblings and apply or explicitly justify inherited auth, rate, error, telemetry, time, and header behavior?
 - **trust-map-check (conditional):** Are untrusted writers, neutralization, output execution contexts, and output guards enumerated?
 - **volume-envelope-check (conditional):** Does collection/per-item external work state the busiest case, cost math, and an explicit page/concurrency/time bound?

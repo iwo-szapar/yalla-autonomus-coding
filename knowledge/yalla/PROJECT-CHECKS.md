@@ -134,7 +134,7 @@ Use these when the task triggers the relevant surface or failure mode. Mark `N/A
 Run only when the listed trigger applies. A generic `N/A` is not valid; write the concrete reason.
 
 - [ ] External API/SDK/provider/protocol/browser/platform/generated-setup behavior -> `.pipeline/external-grounding.json` names current official/upstream sources, the exact claims used, and implementation consequences
-- [ ] Preview/staging/production/remote proof claim -> `.pipeline/runtime-e2e-preflight.json` names target/base revision, safe environment shape, mutation guardrails, inherited baseline failures, and exact proves/does-not-prove limits
+- [ ] Preview/staging/production/remote proof claim -> `.pipeline/runtime-e2e-preflight.json` names the deployed target revision and base revision, safe environment shape, mutation guardrails, inherited baseline failures, and exact proves/does-not-prove limits
 - [ ] New or ported public route/API/CLI/job/webhook/cron -> surface parity names two nearest siblings and applies or justifies auth, rate-limit, error, telemetry, time-budget, and header behavior
 - [ ] Untrusted input or rendered/exported output -> trust map names each writer/hostile input neutralization and each consuming execution context/output guard
 - [ ] Collection read or per-item external call -> volume envelope states busiest realistic case, cost math, a page/concurrency/time bound, and explicit truncation behavior

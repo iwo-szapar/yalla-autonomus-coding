@@ -12,9 +12,9 @@ Write `.pipeline/external-grounding.json` before implementation. Record current 
 
 Trigger: a run claims preview, staging, production, remote, or other real-environment proof.
 
-Write `.pipeline/runtime-e2e-preflight.json` before the run. It must include the target/base revision, required environment and data shape without secret values, mutation guardrails, inherited baseline failures, skip classification, and exact `proves` / `does_not_prove` lists.
+Write `.pipeline/runtime-e2e-preflight.json` before the run. It must bind the evidence to the deployed target revision and base revision, required environment and data shape without secret values, mutation guardrails, inherited baseline failures, skip classification, and exact `proves` / `does_not_prove` lists.
 
-Classify skips as `intentional-guard-skip` or `unresolved-proof-gap`. The latter blocks `PROVEN`; the former is valid only when the PR does not claim the skipped behavior.
+Classify skips as `intentional-guard-skip` or `unresolved-proof-gap`. The latter blocks `PROVEN`; the former is valid only when `does_not_prove` names the skipped behavior and the PR does not claim it. Applicable runtime proof must have `status: pass` to support `PROVEN`.
 
 ## Generative review gates
 
@@ -29,7 +29,7 @@ Use a concrete N/A reason when a gate does not apply. Never invent a generic con
 
 ## UI proof
 
-For a user-visible UI claim, preserve a revision-bound assertion list and private/local screenshots, traces, or a short recording when they materially prove the behavior. Do not upload captures to a public anonymous host by default. Exclude secrets, customer data, payment details, and tokens; record an untested condition instead of exposing them.
+For a user-visible UI claim, preserve a revision-bound assertion list and private/local screenshots, traces, or a short recording when they materially prove the behavior. Do not upload captures to a public anonymous host by default. `sensitive_data_excluded` must be `true` for applicable proof: exclude secrets, customer data, payment details, and tokens; record an untested condition instead of exposing them.
 
 ## Ratchet rule
 
