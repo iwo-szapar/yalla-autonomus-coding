@@ -10,6 +10,7 @@ import {
   YALLA_CONTROL_VERSION,
   acquireRunLock,
   atomicWriteJson,
+  canonicalPipelineStateDir,
   releaseRunLock,
   requiredCapabilityForCommand,
   type Capability,
@@ -257,8 +258,8 @@ function assertDryRunSafe(command: string, args: string[]) {
   }
 }
 
-function writeJson(rootDir: string, name: string, value: unknown) {
-  const pipelineDir = resolve(rootDir, '.pipeline')
+function writeJson(rootDir: string, pipelineStateDir: string, name: string, value: unknown) {
+  const pipelineDir = resolve(rootDir, pipelineStateDir)
   mkdirSync(pipelineDir, { recursive: true })
   const path = resolve(pipelineDir, name)
   atomicWriteJson(path, value)
@@ -506,12 +507,13 @@ function finishRun(input: {
     side_effects_attempted: input.sideEffectsAttempted,
   }
 
-  const lock = acquireRunLock(input.rootDir, `autopilot:${input.issue}`)
+  const pipelineDir = canonicalPipelineStateDir(input.issue, 'autopilot')
+  const lock = acquireRunLock(input.rootDir, `autopilot:${input.issue}`, undefined, pipelineDir)
   try {
-    const reportPath = input.report === undefined ? undefined : writeJson(input.rootDir, 'autopilot-queue-report.json', input.report)
-    const statePath = writeJson(input.rootDir, 'autopilot-state.json', state)
-    const telemetryPath = writeJson(input.rootDir, 'loop-telemetry.json', telemetry)
-    const logPath = resolve(input.rootDir, '.pipeline/run-log.jsonl')
+    const reportPath = input.report === undefined ? undefined : writeJson(input.rootDir, pipelineDir, 'autopilot-queue-report.json', input.report)
+    const statePath = writeJson(input.rootDir, pipelineDir, 'autopilot-state.json', state)
+    const telemetryPath = writeJson(input.rootDir, pipelineDir, 'loop-telemetry.json', telemetry)
+    const logPath = resolve(input.rootDir, pipelineDir, 'run-log.jsonl')
     writeFileSync(logPath, `${JSON.stringify(state)}\n`, { flag: 'a', mode: 0o600 })
     return { status: input.status, exitCode: input.status === 'blocked' ? 1 : 0, statePath, telemetryPath, reportPath }
   } finally {

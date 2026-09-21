@@ -4,7 +4,7 @@ Every `/yalla` run classifies the task immediately after preflight and before pl
 
 ## Output
 
-Write the classification into `.pipeline/classification.json` and `.pipeline-state.json`:
+Write the classification into `<run-state>/classification.json` and `.pipeline-state.json`:
 
 ```json
 {
@@ -113,8 +113,8 @@ Set `false` only when one PR can remain independently shippable, reviewable, and
 
 ## Evidence Mode
 
-- `minimal`: tiny-hotfix or docs-only work. PR body includes reproduce/fix/verify evidence; committed `.pipeline/*` artifacts are usually unnecessary.
-- `standard`: default. Local `.pipeline/*` artifacts guide the run; commit only artifacts that are useful for review.
+- `minimal`: tiny-hotfix or docs-only work. PR body includes reproduce/fix/verify evidence; committed `<run-state>/*` artifacts are usually unnecessary.
+- `standard`: default. Local `<run-state>/*` artifacts guide the run; commit only artifacts that are useful for review.
 - `strict`: high-risk work. Use intent brief, hostile self-critique, acceptance trace, test evidence, and architecture alignment proof where applicable.
 
 ## Ceremony Mode

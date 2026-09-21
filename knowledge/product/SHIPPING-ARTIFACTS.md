@@ -11,7 +11,7 @@ Do not create a separate generic documentation tree by default. Use the smallest
 | Operational process/runbooks | `docs/guides/*.md`, `docs/runbooks/*.md`, or equivalent |
 | Product bet and validation plan | `docs/prd/*.md`, `plans/active/issue-###-*.md`, or a project template |
 | Incident-derived rule | `docs/learnings/YYYY-MM-DD-*.md` or the project conventions doc only if global |
-| Active run evidence | `.pipeline/*` local artifacts, committed only when review-relevant |
+| Active run evidence | `<run-state>/*` local artifacts, committed only when review-relevant |
 | Agent workflow rule | `skills/*`, `knowledge/*`, `agents/*`, or vendored `.claude/*` engine files |
 
 ## Core Artifacts
@@ -35,6 +35,6 @@ Add only when the capability exists or changes:
 ## Anti-Patterns
 
 - Creating empty docs for capabilities that do not exist.
-- Treating `.pipeline/*` as a permanent documentation system.
+- Treating `<run-state>/*` as a permanent documentation system.
 - Updating the project conventions doc with one-off preferences.
 - Claiming docs are aligned without code evidence or test evidence.

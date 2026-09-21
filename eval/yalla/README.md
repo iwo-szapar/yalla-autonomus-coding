@@ -77,9 +77,9 @@ The outcome-quality command validates the PRD 04 proving-ground runs:
 
 The smoke command runs all eval suites and fails if any suite fails.
 
-The autopilot loop-lite command validates the single-issue local dry-run path. It checks GitHub auth, probes one canonical `issue-###`, writes `.pipeline/autopilot-state.json` and `.pipeline/loop-telemetry.json`, and does not mutate GitHub in dry-run mode. The target repo is resolved from `YALLA_REPO`, then `gh repo view`, then a documented `<owner>/<repo>` placeholder.
+The autopilot loop-lite command validates the single-issue local dry-run path. It checks GitHub auth, probes one canonical `issue-###`, writes `.pipeline/runs/<issue-id>/autopilot/autopilot-state.json` and `loop-telemetry.json`, and does not mutate GitHub in dry-run mode. The target repo is resolved from `YALLA_REPO`, then `gh repo view`, then a documented `<owner>/<repo>` placeholder.
 
-The queue dry-run validates report-only queue selection. It lists open issues with the eligibility label, skips block-labeled issues, writes `.pipeline/autopilot-queue-report.json`, and does not mutate GitHub.
+The queue dry-run validates report-only queue selection. It lists open issues with the eligibility label, skips block-labeled issues, writes `.pipeline/runs/queue/autopilot/autopilot-queue-report.json`, and does not mutate GitHub.
 
 Scheduled or unattended operation is outside the V0 eval contract. Use `docs/autopilot/README.md` and `docs/autopilot/readiness-checklist.md` to graduate from local dry-run to report-only, assisted PR, or unattended PR modes.
 

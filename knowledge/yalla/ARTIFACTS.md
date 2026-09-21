@@ -2,11 +2,11 @@
 
 Machine-readable artifacts let `/yalla-review` and `/yalla-audit` verify the run instead of trusting prose. They are evidence schemas, not a mandate to commit every file on every PR.
 
-Store artifacts under `.pipeline/` during active runs. Commit artifacts only when they explain non-obvious decisions, accepted risks, architecture alignment, or review findings that reviewers need in the diff. Keep routine state local and summarize it in the PR body.
+Store artifacts under one issue/run namespace during active runs, for example `<run-state> = .pipeline/runs/issue-123/attempt-1`. Pass the exact `--pipeline-dir <run-state> --issue-id <issue-id> --run-id <run-id>` triple to every stateful control command. Commit artifacts only when they explain non-obvious decisions, accepted risks, architecture alignment, or review findings that reviewers need in the diff. Keep routine state local and summarize it in the PR body. Root `.pipeline/*` examples from older releases are manual, read-only legacy evidence and cannot be selected for a run.
 
 Do not commit a follow-up artifact update just to record the PR number or final PR check status. PR check evidence belongs in the PR body or PR comments because another commit restarts checks and makes committed CI status stale.
 
-Tiny hotfixes may use minimal evidence mode: no committed `.pipeline/*` artifacts when the PR body contains reproduce/fix/verify evidence and the diff is self-evident.
+Tiny hotfixes may use minimal evidence mode: no committed run-state artifacts when the PR body contains reproduce/fix/verify evidence and the diff is self-evident.
 
 ## Artifact Policy
 
@@ -21,10 +21,10 @@ Tiny hotfixes may use minimal evidence mode: no committed `.pipeline/*` artifact
 Before final-head testing or review, run:
 
 ```bash
-npm run yalla:run -- candidate --issue-id issue-### --run-id <stable-run-id>
+npm run yalla:run -- candidate --pipeline-dir <run-state> --issue-id issue-### --run-id <stable-run-id>
 ```
 
-`.pipeline/candidate.json` binds the run to repository/worktree/branch identity,
+`<run-state>/candidate.json` binds the run namespace and repository/worktree/branch identity,
 base and head SHAs, working-tree fingerprint, contract digest, Yalla config
 digest, trust-policy digest, schema version, and Yalla version. Source, contract,
 configuration, or policy drift creates a new candidate; prior proof is stale.
@@ -34,8 +34,8 @@ Runner-managed artifacts carry `_meta`:
 ```json
 {
   "_meta": {
-    "schema_version": 1,
-    "yalla_version": "1.4.0",
+    "schema_version": 2,
+    "yalla_version": "1.4.1",
     "producer": "yalla-run:evaluate",
     "produced_at": "2026-09-20T12:00:00.000Z",
     "candidate_id": "sha256...",
@@ -54,13 +54,13 @@ After writing a manual JSON proof artifact such as acceptance trace, review
 results, or outcome evaluation, bind it to the current candidate:
 
 ```bash
-npm run yalla:run -- stamp --target .pipeline/outcome-evaluation.json
+npm run yalla:run -- stamp --pipeline-dir <run-state> --issue-id <issue-id> --run-id <run-id> --target <run-state>/outcome-evaluation.json
 ```
 
 The binding digest covers both content and metadata, including the complete dependency map. Removing or replacing dependency digests after stamping makes the artifact stale. An unbound legacy artifact remains inspectable, but it cannot support an exact
 resume, evaluator decision, loop continuation, or `PROVEN`. `stamp` records the
 default dependency chain for acceptance, test, review, and outcome artifacts;
-use repeated `--input .pipeline/<dependency>.json` arguments for additional
+use repeated `--input <run-state>/<dependency>.json` arguments for additional
 inputs whose changes must invalidate the stamped result.
 
 `PROVEN` binding is fail-closed: classification, baseline, acceptance trace,
@@ -70,12 +70,12 @@ the goal contract, goal-required commands must appear in passing test evidence,
 and final required checks/evidence-gate decisions must preserve classification.
 A bare verdict field is never proof.
 
-### `.pipeline/baseline.json`
+### `<run-state>/baseline.json`
 
 Capture inherited failures before candidate repair work:
 
 ```bash
-npm run yalla:run -- baseline --finding "existing failing check and evidence"
+npm run yalla:run -- baseline --pipeline-dir <run-state> --issue-id <issue-id> --run-id <run-id> --finding "existing failing check and evidence"
 ```
 
 Do not copy an unrelated baseline repair into the candidate. Link a separate
@@ -110,19 +110,19 @@ must verify:
   "command": "npm run release:preflight",
   "status": "pass",
   "executed_at": "2026-09-20T12:00:00.000Z",
-  "evidence_ref": ".pipeline/preflight-output.json"
+  "evidence_ref": "<run-state>/preflight-output.json"
 }
 ```
 
 The local `npm run yalla:run -- preflight` command always returns
 `POLICY_BLOCKED`; it never executes a repository-supplied command. An external
 executor may produce equivalent evidence in its own trusted store, but local
-`.pipeline/release-preflight.json` and `.pipeline/preflight-output.json` files
+`<run-state>/release-preflight.json` and `<run-state>/preflight-output.json` files
 are non-authoritative and cannot be stamped into local proof. The external
 executor must independently reject missing, stale, failed, or
 identity-mismatched evidence before doing consequential work.
 
-`.pipeline/operation-receipts.json` records non-protected local actions by
+`<run-state>/operation-receipts.json` records non-protected local actions by
 operation ID, candidate, capability, action, and target before execution, then
 records `succeeded` or `failed`. Reusing a pending or terminal ID is a no-op;
 changing its scope is an error. The local runner refuses to reserve every
@@ -135,7 +135,7 @@ authority. The local runner may only close an already-existing
 receipt with the same operation ID/scope; it can do so after candidate drift so
 the real outcome does not remain pending.
 
-`.pipeline/remote-jobs.json` reserves a local telemetry budget before a focused
+`<run-state>/remote-jobs.json` reserves a local telemetry budget before a focused
 check, full suite, preview/production build, or smoke run starts. Every new
 record carries `execution_authority: none-local-telemetry-only`; an external
 executor must never consume it as a command. Completion records success/fail,
@@ -145,7 +145,7 @@ the exact candidate. Completion can be recorded after candidate drift. A
 `reused` artifact counts as a remote job but not as another full-suite or
 production-build execution.
 
-### `.pipeline/path-ownership.json`
+### `<run-state>/path-ownership.json`
 
 Only parallel team runs need path claims:
 
@@ -158,7 +158,7 @@ Only parallel team runs need path claims:
 }
 ```
 
-Run `npm run yalla:run -- ownership`. Claims must be canonical repository-relative
+Run `npm run yalla:run -- ownership --pipeline-dir <run-state> --issue-id <issue-id> --run-id <run-id>`. Claims must be canonical repository-relative
 paths: aliases, absolute paths, escapes, and symlinks outside the repository are
 rejected. Each `changed_paths` entry must be inside that same owner's claim.
 Parallel runs require per-owner changed-path evidence, and any unattributed,
@@ -166,7 +166,7 @@ false, multiply attributed, overlapping, or globally unowned change returns
 `CONFLICT`. This is a coordination check, not a rigid lock on ordinary
 single-agent work.
 
-### `.pipeline/classification.json`
+### `<run-state>/classification.json`
 
 ```json
 {
@@ -239,7 +239,7 @@ single-agent work.
 }
 ```
 
-### `.pipeline/architecture-alignment.json`
+### `<run-state>/architecture-alignment.json`
 
 Required when the task changes behavior described by `docs/architecture/*`, or when the plan's architecture-doc gate applies.
 
@@ -263,7 +263,7 @@ Required when the task changes behavior described by `docs/architecture/*`, or w
 }
 ```
 
-### `.pipeline/product-intent.json`
+### `<run-state>/product-intent.json`
 
 Required when Product Intent applies and the intent is non-obvious, review-relevant, or changes money, access, data, privacy, delivery, trust, or product-promise boundaries.
 
@@ -293,7 +293,7 @@ Required when Product Intent applies and the intent is non-obvious, review-relev
 }
 ```
 
-### `.pipeline/acceptance-trace.json`
+### `<run-state>/acceptance-trace.json`
 
 ```json
 {
@@ -320,7 +320,7 @@ Required when Product Intent applies and the intent is non-obvious, review-relev
 
 For medium/high-risk criteria, set `boundary_proof.required` when a local or mocked check could falsely report the user-visible promise as successful. A `covered` criterion must then have `boundary_proof.status: "covered"`.
 
-### `.pipeline/external-grounding.json`
+### `<run-state>/external-grounding.json`
 
 Required when implementation relies on external API, SDK, protocol, provider/platform/browser behavior, or generated setup instructions. Do not put secrets in this artifact.
 
@@ -345,7 +345,7 @@ Required when implementation relies on external API, SDK, protocol, provider/pla
 
 `inconclusive` grounding cannot support `PROVEN` for a behavior that depends on it.
 
-### `.pipeline/runtime-e2e-preflight.json`
+### `<run-state>/runtime-e2e-preflight.json`
 
 Required before a run claims preview, staging, production, remote, or another real-environment proof. Record only safe environment shape, never credential values or customer data.
 
@@ -367,7 +367,7 @@ Required before a run claims preview, staging, production, remote, or another re
 
 `base_ref` and `target_ref` use `<target>@<revision>` and must identify the immutable base and deployed target revision being exercised. An `unresolved-proof-gap` or any status other than `pass` means the corresponding promise cannot be marked `PROVEN`. An intentional guard skip is valid only when `does_not_prove` names the skipped behavior and that behavior is excluded from the PR promise.
 
-### `.pipeline/progress.md`
+### `<run-state>/progress.md`
 
 Markdown handoff artifact for cold worktree resumes and phase PR handoffs. Keep it concise and ephemeral; promote only durable rules to your project's conventions doc (`CLAUDE.md` / `AGENTS.md`), `.claude/YALLA.md`, or `docs/learnings/*` during Compound.
 
@@ -390,7 +390,7 @@ Markdown handoff artifact for cold worktree resumes and phase PR handoffs. Keep 
 - [Exact next action for a fresh worktree]
 ```
 
-### `.pipeline/but-for-real.md`
+### `<run-state>/but-for-real.md`
 
 Hostile self-critique before binary review. Required for strict evidence mode, optional for tiny hotfixes.
 
@@ -404,7 +404,7 @@ Hostile self-critique before binary review. Required for strict evidence mode, o
    - Evidence: [code/test/artifact]
 ```
 
-### `.pipeline/intent-brief.md`
+### `<run-state>/intent-brief.md`
 
 Markdown brief for fresh-context review. Required for non-tiny medium/high-risk changes when reviewer separation is used; optional for tiny hotfixes.
 
@@ -435,7 +435,7 @@ Markdown brief for fresh-context review. Required for non-tiny medium/high-risk 
 
 Every run must include at least one negative, failure-path, or false-success criterion. Do not use `model-judge` when a deterministic seam can prove the behavior.
 
-### `.pipeline/test-evidence.json`
+### `<run-state>/test-evidence.json`
 
 ```json
 {
@@ -470,14 +470,14 @@ Every run must include at least one negative, failure-path, or false-success cri
   },
   "architecture_alignment": {
     "status": "pass|n/a|blocked|accepted-risk",
-    "artifact": ".pipeline/architecture-alignment.json",
+    "artifact": "<run-state>/architecture-alignment.json",
     "summary": "docs/architecture/flows.md updated and covered by checkout success tests"
   },
   "seam_blockers": []
 }
 ```
 
-### `.pipeline/review-results.json`
+### `<run-state>/review-results.json`
 
 ```json
 {
@@ -498,7 +498,7 @@ Every run must include at least one negative, failure-path, or false-success cri
 }
 ```
 
-### `.pipeline/outcome-evaluation.json`
+### `<run-state>/outcome-evaluation.json`
 
 Required before shipping. This is the final proof-contract artifact that decides whether the run can be called successful.
 
@@ -530,18 +530,18 @@ Verdict rules:
 
 Autopilot state is local by default and should not be committed unless it explains a review decision or the repo intentionally audits loop state in git. See `docs/autopilot/` for the operating model.
 
-- `.pipeline/autopilot-state.json` records selected issue, logical lock owner, mode, allowed capabilities, and last safe checkpoint.
-- `.pipeline/loop-telemetry.json` records command status, iteration usage, attempted side effects, and stop reason.
-- `.pipeline/run-log.jsonl` is append-only completed-attempt history.
-- `.pipeline/run.lock` is the short-lived exclusive local writer token and must never be treated as completion evidence.
+- `.pipeline/runs/<issue-id>/autopilot/autopilot-state.json` records selected issue, logical lock owner, mode, allowed capabilities, and last safe checkpoint.
+- `.pipeline/runs/<issue-id>/autopilot/loop-telemetry.json` records command status, iteration usage, attempted side effects, and stop reason.
+- `.pipeline/runs/<issue-id>/autopilot/run-log.jsonl` is append-only completed-attempt history.
+- `.pipeline/runs/<issue-id>/autopilot/run.lock` is the short-lived exclusive local writer token and must never be treated as completion evidence.
 
 `autopilot.token_budget` remains a configured limit for a future assisted or
 unattended runtime. Do not claim token enforcement from a nonexistent
-`.pipeline/token-budget.json` artifact.
+`<run-state>/token-budget.json` artifact.
 
 Any autopilot artifact that reports `NOT_PROVEN`, `INCONCLUSIVE`, exhausted budget, failed review, ambiguous auth, or active kill switch must stop progression instead of opening or advancing work as successful.
 
-### `.pipeline/ship-manifest.json`
+### `<run-state>/ship-manifest.json`
 
 ```json
 {
@@ -553,6 +553,6 @@ Any autopilot artifact that reports `NOT_PROVEN`, `INCONCLUSIVE`, exhausted budg
   "incident_required": false,
   "ci_status": "pass|fail|pending|not-run|n/a",
   "reviewability_status": "pass|fail",
-  "artifacts": ["plans/active/issue-###.plan.json", ".pipeline/review-results.json"]
+  "artifacts": ["plans/active/issue-###.plan.json", "<run-state>/review-results.json"]
 }
 ```

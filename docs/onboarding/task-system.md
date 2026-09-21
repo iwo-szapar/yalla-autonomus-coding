@@ -139,10 +139,10 @@ The command:
 - lists open issues labeled `yalla-ready`,
 - skips issues with block labels,
 - scores priority labels,
-- writes `.pipeline/autopilot-queue-report.json`,
+- writes `.pipeline/runs/queue/autopilot/autopilot-queue-report.json`,
 - does not mutate GitHub.
 
-For Linear, queue dry-run should use the same eligibility rules against configured states/labels and write a local `.pipeline/autopilot-queue-report.json` before any Linear mutation is enabled.
+For Linear, queue dry-run should use the same eligibility rules against configured states/labels and write a local `.pipeline/runs/queue/autopilot/autopilot-queue-report.json` before any Linear mutation is enabled.
 
 ## Eligibility Rules
 

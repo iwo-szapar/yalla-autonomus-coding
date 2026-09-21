@@ -2,7 +2,7 @@
 
 Reference prompts for `/yalla` when a run benefits from subagents. Replace `issue-###`, `[title]`, `[description]`, `[plan path]`, and `[changed files]` before spawning.
 
-Teammates report back to the lead via SendMessage only. There is no shared database between agents — the lead synthesizes everything from messages and persists state to `.pipeline-state.json` and `.pipeline/*` artifacts. Use `issue-###` IDs; do not write inter-agent findings to any memory table.
+Teammates report back to the lead via SendMessage only. There is no shared database between agents — the lead synthesizes everything from messages and persists state to `.pipeline-state.json` and the exact `<run-state>/*` artifact namespace. Use `issue-###` IDs; do not write inter-agent findings to any memory table.
 
 Throughout, "your project's conventions doc" means `CLAUDE.md` or `AGENTS.md` (whichever the repo uses), plus `.claude/YALLA.md` for repo-specific commands, gotchas, and risk gates.
 
@@ -181,8 +181,9 @@ Mock only system boundaries. Do not mock internal modules just to make testing e
 
 Spawn reviewers after tests/validation evidence exists. The reviewer must not be the same context that wrote the implementation.
 
-Every review prompt includes the candidate ID/SHA and base SHA. A reviewer
-first checks them against `.pipeline/candidate.json`; a late review returns
+Every review prompt includes the candidate ID/SHA, base SHA, issue ID, run ID,
+and canonical run namespace. A reviewer first checks them against
+`<run-state>/candidate.json`; a late review returns
 `SUPERSEDED` instead of Pass or Fail.
 
 Every reviewer must return `PASS — [check]` or `FAIL — [check]`. Every Fail needs file, exact code, issue, and fix. Findings are reported to the lead via SendMessage.

@@ -7,10 +7,10 @@ Use this checklist before moving a repo from local dry-run to scheduled or unatt
 - [ ] `gh auth status` succeeds or the expected file-only fallback is documented.
 - [ ] `YALLA_REPO` or `gh repo view` resolves the intended target repo.
 - [ ] `npm run yalla:autopilot -- run --issue issue-### --mode dry-run` completes without GitHub mutations.
-- [ ] `.pipeline/autopilot-state.json` records the selected issue and safe stop state.
-- [ ] `.pipeline/loop-telemetry.json` records command status, timing, and proof verdict.
-- [ ] `.pipeline/candidate.json` binds the run to repository, worktree, branch, base/head SHAs, contract, config, and trust policy.
-- [ ] Concurrent writers are refused by `.pipeline/run.lock`, and a stale/mismatched checkpoint cannot resume automatically.
+- [ ] `.pipeline/runs/<issue-id>/autopilot/autopilot-state.json` records the selected issue and safe stop state.
+- [ ] `.pipeline/runs/<issue-id>/autopilot/loop-telemetry.json` records command status, timing, and proof verdict.
+- [ ] `.pipeline/runs/<issue-id>/autopilot/candidate.json` binds the run to repository, worktree, branch, base/head SHAs, contract, config, trust policy, and namespace.
+- [ ] Concurrent writers are refused by the namespace-local `run.lock`, and a stale/mismatched checkpoint cannot resume automatically.
 - [ ] Default capabilities are least privilege; no protected capability is persisted in `.claude/YALLA.md`.
 - [ ] T1/T2 repositories pass local `release_adapter` schema/identity validation; an external operator-controlled executor owns immutable provider-identity preflight before consequential execution.
 - [ ] `npm run eval:yalla:smoke` passes.
@@ -78,8 +78,8 @@ Record the promotion decision before changing levels:
   "verdict": "go|no-go",
   "evidence": [
     "workflow run URL or local command output",
-    ".pipeline/autopilot-state.json",
-    ".pipeline/loop-telemetry.json"
+    ".pipeline/runs/<issue-id>/autopilot/autopilot-state.json",
+    ".pipeline/runs/<issue-id>/autopilot/loop-telemetry.json"
   ],
   "open_risks": [],
   "decided_by": "human maintainer",

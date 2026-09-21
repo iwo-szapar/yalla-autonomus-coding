@@ -43,13 +43,13 @@ Two things wrap the linear pipeline and make it more than a prompt: the **knowle
 | **4 · Test** | Runs the suite until green, verifies every acceptance criterion maps to evidence, and records falsifiable verification (`VERIFIED` / `NOT VERIFIED` / `INCONCLUSIVE`). |
 | **5 · Review** | Independent reviewers each answer **one** binary question (security? complexity? correctness?). Any Fail blocks the ship. The author never reviews their own code. |
 | **6 · Compound** | Captures actionable learnings to their smallest lasting home so the same mistake isn't repeated. |
-| **7 · Ship** | Writes `.pipeline/outcome-evaluation.json`, commits specific files, and opens a PR — PR-only by default; never auto-merges unless you asked in this run. |
+| **7 · Ship** | Writes the selected run namespace's `outcome-evaluation.json`, commits specific files, and opens a PR — PR-only by default; never auto-merges unless you asked in this run. |
 
 The core idea: **keep the universal pipeline small, and activate risk-specific gates only when the diff touches that subsystem.** A docs typo doesn't get dragged through payment, migration, and auth review. A change to your billing code does.
 
 ## The Proof Contract
 
-A run is "done" only when its **verdict is `PROVEN`** — and `PROVEN` is backed by artifacts, not prose. Before shipping, Yalla writes `.pipeline/outcome-evaluation.json` with a verdict of exactly one of:
+A run is "done" only when its **verdict is `PROVEN`** — and `PROVEN` is backed by artifacts, not prose. Before shipping, Yalla writes `<run-state>/outcome-evaluation.json` with a verdict of exactly one of:
 
 - **`PROVEN`** — the acceptance trace exactly covers the goal contract, every required evidence command passes, classification gates remain armed in final review, all seven portable evidence gates have applicable/pass or concrete N/A decisions, and no remaining delta exists. Only `PROVEN` may be called done, complete, or ready to merge.
 - **`NOT_PROVEN`** — evidence or review shows the promise isn't satisfied. An honest outcome, not a failure to hide.
@@ -140,7 +140,7 @@ npm run yalla:autopilot -- run --issue issue-### --mode dry-run
 npm run yalla:autopilot -- queue --mode dry-run
 ```
 
-The queue dry-run ranks eligible issues with the `yalla-ready` label, skips block labels, and writes `.pipeline/autopilot-queue-report.json` without mutating GitHub. For scheduled or unattended operation, use the staged runbook in [`docs/autopilot/`](docs/autopilot/). The default posture remains PR-only and dry-run/report-only until the readiness checklist passes.
+The queue dry-run ranks eligible issues with the `yalla-ready` label, skips block labels, and writes `.pipeline/runs/queue/autopilot/autopilot-queue-report.json` without mutating GitHub. For scheduled or unattended operation, use the staged runbook in [`docs/autopilot/`](docs/autopilot/). The default posture remains PR-only and dry-run/report-only until the readiness checklist passes.
 
 ## Install
 
@@ -237,30 +237,34 @@ That's the whole adaptation. No code changes. See [`CUSTOMIZING.md`](CUSTOMIZING
 Operator run-control helpers are also available from the cloned repo:
 
 ```bash
-npm run yalla:run -- doctor
-npm run yalla:run -- goal --message "Ship a verified healthcheck" --criterion "returns 200" --evidence "npm test"
-npm run yalla:run -- candidate --issue-id issue-123 --run-id issue-123-attempt-1
-npm run yalla:run -- baseline --message "main is green"
-npm run yalla:run -- event --event stage.started --phase plan --message "Planning started"
-npm run yalla:run -- checkpoint --phase test --message "Focused tests passed"
-npm run yalla:run -- stamp --target .pipeline/test-evidence.json
-npm run yalla:run -- stamp --target .pipeline/outcome-evaluation.json --input .pipeline/custom-proof.json
-npm run yalla:run -- evaluate --evaluator reviewer --verdict PASS --message "Evidence is sufficient" --failure-class CANDIDATE_FAILURE
-npm run yalla:run -- ownership
-npm run yalla:run -- operation --operation-id open-pr-123 --capability open_pr --action open --target issue-123 --operation-status pending
-npm run yalla:run -- operation --operation-id open-pr-123 --capability open_pr --action open --target issue-123 --operation-status succeeded
-npm run yalla:run -- remote-job --operation-id suite-123-1 --job-kind full-suite --job-status reserve --artifact-action built
-npm run yalla:run -- remote-job --operation-id suite-123-1 --job-kind full-suite --job-status succeeded --artifact-action built --duration-seconds 600 --cost 1.25
-npm run yalla:run -- loop
-npm run yalla:run -- status
-npm run yalla:run -- report
-npm run yalla:run -- mine-sessions
-npm run yalla:run -- resume
-npm run yalla:run -- rewind --target plan
-npm run yalla:run -- export
+ISSUE_ID=issue-123
+RUN_ID=attempt-1
+RUN_STATE=.pipeline/runs/$ISSUE_ID/$RUN_ID
+RUN_CONTEXT=(--pipeline-dir "$RUN_STATE" --issue-id "$ISSUE_ID" --run-id "$RUN_ID")
+npm run yalla:run -- doctor "${RUN_CONTEXT[@]}"
+npm run yalla:run -- goal "${RUN_CONTEXT[@]}" --message "Ship a verified healthcheck" --criterion "returns 200" --evidence "npm test"
+npm run yalla:run -- candidate "${RUN_CONTEXT[@]}"
+npm run yalla:run -- baseline "${RUN_CONTEXT[@]}" --message "main is green"
+npm run yalla:run -- event "${RUN_CONTEXT[@]}" --event stage.started --phase plan --message "Planning started"
+npm run yalla:run -- checkpoint "${RUN_CONTEXT[@]}" --phase test --message "Focused tests passed"
+npm run yalla:run -- stamp "${RUN_CONTEXT[@]}" --target "$RUN_STATE/test-evidence.json"
+npm run yalla:run -- stamp "${RUN_CONTEXT[@]}" --target "$RUN_STATE/outcome-evaluation.json" --input "$RUN_STATE/custom-proof.json"
+npm run yalla:run -- evaluate "${RUN_CONTEXT[@]}" --evaluator reviewer --verdict PASS --message "Evidence is sufficient" --failure-class CANDIDATE_FAILURE
+npm run yalla:run -- ownership "${RUN_CONTEXT[@]}"
+npm run yalla:run -- operation "${RUN_CONTEXT[@]}" --operation-id open-pr-123 --capability open_pr --action open --target issue-123 --operation-status pending
+npm run yalla:run -- operation "${RUN_CONTEXT[@]}" --operation-id open-pr-123 --capability open_pr --action open --target issue-123 --operation-status succeeded
+npm run yalla:run -- remote-job "${RUN_CONTEXT[@]}" --operation-id suite-123-1 --job-kind full-suite --job-status reserve --artifact-action built
+npm run yalla:run -- remote-job "${RUN_CONTEXT[@]}" --operation-id suite-123-1 --job-kind full-suite --job-status succeeded --artifact-action built --duration-seconds 600 --cost 1.25
+npm run yalla:run -- loop "${RUN_CONTEXT[@]}"
+npm run yalla:run -- status "${RUN_CONTEXT[@]}"
+npm run yalla:run -- report "${RUN_CONTEXT[@]}"
+npm run yalla:run -- mine-sessions "${RUN_CONTEXT[@]}"
+npm run yalla:run -- resume "${RUN_CONTEXT[@]}"
+npm run yalla:run -- rewind "${RUN_CONTEXT[@]}" --target plan
+npm run yalla:run -- export "${RUN_CONTEXT[@]}"
 ```
 
-These controls write only local evidence. `resume` continues automatically only when the declared repository matches the observed origin, the configured base resolves, and candidate/checkpoint lineage is exact; `rewind` selects a checkpoint but never runs destructive Git commands. The local runner deliberately refuses repository-supplied release preflight commands and all protected capabilities. An external operator-controlled executor must independently verify provider identity, run any release preflight, obtain approval, and perform consequential actions. Local operation and remote-job records are telemetry only and must never be consumed as execution authority. Non-protected capabilities must be allowed in config. A pending receipt or remote job can still be closed after candidate drift, so real outcomes do not remain stuck. Remote artifact reuse remains visible in telemetry and consumes the overall job budget, but it does not consume a full-suite or production-build execution slot.
+Use one canonical `RUN_STATE` for the whole attempt. Every stateful command requires the same stable issue ID, run ID, and derived namespace; validation happens while that namespace's exclusive lock is held. Existing root `.pipeline/*` artifacts are manual, read-only legacy evidence: the runner will not select or overwrite them. These controls write only local evidence. `resume` continues automatically only when the declared repository matches the observed origin, the configured base resolves, and candidate/checkpoint lineage is exact; `rewind` selects a checkpoint but never runs destructive Git commands. The local runner deliberately refuses repository-supplied release preflight commands and all protected capabilities. An external operator-controlled executor must independently verify provider identity, run any release preflight, obtain approval, and perform consequential actions. Local operation and remote-job records are telemetry only and must never be consumed as execution authority. Non-protected capabilities must be allowed in config. A pending receipt or remote job can still be closed after candidate drift, so real outcomes do not remain stuck. Remote artifact reuse remains visible in telemetry and consumes the overall job budget, but it does not consume a full-suite or production-build execution slot.
 
 Requires the [GitHub CLI](https://cli.github.com) (`gh auth login`) for default GitHub tracking and PR creation. If Linear is your sprint board, set `tracking_mode: linear` and map `task_system` states in `.claude/YALLA.md`; GitHub still receives branches and PRs. If you intentionally want no external tracker, set `tracking_mode: file-only`.
 

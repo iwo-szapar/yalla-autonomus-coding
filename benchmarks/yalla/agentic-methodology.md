@@ -38,5 +38,5 @@ Every arm runs in a fresh workspace, fresh agent process, and isolated plugin/co
 2. Run instrument self-tests before any paid agent run.
 3. Clear user/global plugins from the baseline.
 4. Run each task/arm in an isolated workspace.
-5. Score from `git diff`, `.pipeline/outcome-evaluation.json`, and raw verifier output.
+5. Score from `git diff`, the exact run namespace's `outcome-evaluation.json`, and raw verifier output.
 6. Publish per-task tables, limitations, and contamination checks.

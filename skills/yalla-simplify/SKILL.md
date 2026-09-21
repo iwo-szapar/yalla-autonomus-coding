@@ -22,7 +22,7 @@ git diff "$BASE_BRANCH"
 
 Read `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/MINIMUM-DIFF.md` and `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/REVIEW-CHECKS.md` before judging.
 
-If `.pipeline/classification.json` exists, inspect `minimum_diff_decision` and compare the diff to its selected rung, file budget, LOC budget, reuse targets, and skipped complexity.
+If `<run-state>/classification.json` exists, inspect `minimum_diff_decision` and compare the diff to its selected rung, file budget, LOC budget, reuse targets, and skipped complexity.
 
 ## Hunt
 

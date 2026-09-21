@@ -90,9 +90,9 @@ Use this before writing a PRD/plan, before testing, and during review. Mark a ro
 
 ## Architecture Alignment Test Evidence
 
-- [ ] `.pipeline/architecture-alignment.json` exists when any architecture-doc source-map row applies
+- [ ] `<run-state>/architecture-alignment.json` exists when any architecture-doc source-map row applies
 - [ ] The artifact lists relevant docs, changed code paths, alignment verdict, docs updated, and evidence
-- [ ] `.pipeline/test-evidence.json` includes architecture-doc alignment status, not just command results
+- [ ] `<run-state>/test-evidence.json` includes architecture-doc alignment status, not just command results
 - [ ] Tests cover behavior through the public seam used by the architecture doc claim
 - [ ] Claims that cannot be behavior-tested are recorded as unchanged-code evidence or accepted risk
 

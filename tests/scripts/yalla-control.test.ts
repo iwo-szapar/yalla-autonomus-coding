@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -8,15 +8,18 @@ import {
   artifactFreshness,
   assertWorktreeCleanupSafe,
   bindArtifact,
+  checkRemoteJobBudget,
   createCandidateIdentity,
   completeOperationReceipt,
   detectPathOverlaps,
   findUnownedChangedPaths,
   normalizeRepositoryIdentity,
   normalizePathClaims,
+  readCandidate,
   recordOperationReceipt,
   recordRemoteJob,
   releaseRunLock,
+  resolvePipelineStateDir,
   requiredCapabilityForCommand,
   routeFailure,
   validateCandidate,
@@ -25,6 +28,8 @@ import {
 } from '../../scripts/yalla-control.js'
 import { loadReleaseAdapter, releaseAdapterSchema } from '../../scripts/yalla-release-adapter.js'
 
+const defaultPipelineDir = '.pipeline/runs/issue-47/run-1'
+
 function gitRoot() {
   const root = mkdtempSync(join(tmpdir(), 'yalla-control-'))
   execFileSync('git', ['init', '-b', 'main'], { cwd: root })
@@ -32,22 +37,23 @@ function gitRoot() {
   execFileSync('git', ['config', 'user.name', 'Yalla Test'], { cwd: root })
   execFileSync('git', ['remote', 'add', 'origin', 'https://github.com/owner/repo.git'], { cwd: root })
   mkdirSync(join(root, '.claude'), { recursive: true })
-  mkdirSync(join(root, '.pipeline'), { recursive: true })
+  mkdirSync(join(root, defaultPipelineDir), { recursive: true })
   writeFileSync(join(root, '.claude/YALLA.md'), 'repo: owner/repo\nbase_branch: main\n')
-  writeFileSync(join(root, '.pipeline/goal-contract.json'), JSON.stringify({ version: 1, desired_end_state: 'safe candidate' }))
+  writeFileSync(join(root, defaultPipelineDir, 'goal-contract.json'), JSON.stringify({ version: 1, desired_end_state: 'safe candidate' }))
   writeFileSync(join(root, 'app.ts'), 'export const value = 1\n')
   execFileSync('git', ['add', 'app.ts', '.claude/YALLA.md'], { cwd: root })
   execFileSync('git', ['commit', '-m', 'initial'], { cwd: root })
   return root
 }
 
-function candidate(root: string) {
+function candidate(root: string, pipelineDir = defaultPipelineDir, issueId = 'issue-47', runId = 'run-1') {
   return createCandidateIdentity({
     rootDir: root,
+    pipelineDir,
     repository: 'owner/repo',
     baseBranch: 'main',
-    runId: 'run-1',
-    issueId: 'issue-47',
+    runId,
+    issueId,
     now: () => '2026-09-20T12:00:00.000Z',
   })
 }
@@ -83,11 +89,91 @@ describe('candidate integrity control plane', () => {
     expect(second.candidate_id).toBe(first.candidate_id)
   })
 
+  it('binds candidate identity and address to an isolated pipeline namespace', () => {
+    const root = gitRoot()
+    for (const namespace of ['.pipeline/runs/issue-47/run-a', '.pipeline/runs/issue-47/run-b']) {
+      mkdirSync(join(root, namespace), { recursive: true })
+      writeFileSync(join(root, namespace, 'goal-contract.json'), JSON.stringify({ version: 1, desired_end_state: 'same contract' }))
+    }
+
+    const first = candidate(root, '.pipeline/runs/issue-47/run-a', 'issue-47', 'run-a')
+    const second = candidate(root, '.pipeline/runs/issue-47/run-b', 'issue-47', 'run-b')
+
+    expect(first.pipeline_dir).toBe('.pipeline/runs/issue-47/run-a')
+    expect(second.pipeline_dir).toBe('.pipeline/runs/issue-47/run-b')
+    expect(first.contract_digest).toBe(second.contract_digest)
+    expect(first.candidate_id).not.toBe(second.candidate_id)
+  })
+
+  it('resolves only canonical repository-contained state directories', () => {
+    const root = gitRoot()
+    const defaultStateDir = resolvePipelineStateDir(root)
+    const relativeState = '.pipeline/runs/issue-47/run-a'
+    const inside = join(realpathSync(root), relativeState)
+    expect(defaultStateDir).toMatchObject({ relative: '.pipeline' })
+    expect(resolvePipelineStateDir(root, relativeState)).toEqual({ absolute: inside, relative: relativeState })
+    expect(resolvePipelineStateDir(root, inside)).toEqual({ absolute: inside, relative: relativeState })
+    expect(() => resolvePipelineStateDir(root, '.pipeline/../other')).toThrow('must be canonical')
+    expect(() => resolvePipelineStateDir(root, `${relativeState}/`)).toThrow('must be canonical')
+    expect(() => resolvePipelineStateDir(root, '../outside')).toThrow('stay inside the repository')
+    expect(() => resolvePipelineStateDir(root, join(tmpdir(), 'outside-state'))).toThrow('stay inside the repository')
+
+    const outside = mkdtempSync(join(tmpdir(), 'yalla-state-outside-'))
+    symlinkSync(outside, join(root, '.pipeline/runs/issue-link'), 'dir')
+    expect(() => resolvePipelineStateDir(root, '.pipeline/runs/issue-link/run-a')).toThrow('cannot traverse a symbolic link')
+  })
+
+  it('isolates locks and candidate persistence between namespaces', () => {
+    const root = gitRoot()
+    const firstNamespace = '.pipeline/runs/issue-47/run-a'
+    const secondNamespace = '.pipeline/runs/issue-47/run-b'
+    for (const namespace of [firstNamespace, secondNamespace]) mkdirSync(join(root, namespace), { recursive: true })
+    const firstCandidate = candidate(root, firstNamespace, 'issue-47', 'run-a')
+    const secondCandidate = candidate(root, secondNamespace, 'issue-47', 'run-b')
+
+    const firstLock = acquireRunLock(root, 'first', undefined, firstNamespace)
+    const secondLock = acquireRunLock(root, 'second', undefined, secondNamespace)
+    expect(() => acquireRunLock(root, 'collision', undefined, firstNamespace)).toThrow('already held by first')
+    releaseRunLock(firstLock)
+    releaseRunLock(secondLock)
+
+    writeCandidate(root, firstCandidate, firstNamespace)
+    writeCandidate(root, secondCandidate, secondNamespace)
+    expect(readCandidate(root, firstNamespace)?.candidate_id).toBe(firstCandidate.candidate_id)
+    expect(readCandidate(root, secondNamespace)?.candidate_id).toBe(secondCandidate.candidate_id)
+    expect(() => writeCandidate(root, firstCandidate, secondNamespace)).toThrow(`refusing namespace ${secondNamespace}`)
+  })
+
+  it('validates a candidate against its bound namespace', () => {
+    const root = gitRoot()
+    const namespace = '.pipeline/runs/issue-47/run-a'
+    mkdirSync(join(root, namespace), { recursive: true })
+    writeFileSync(join(root, namespace, 'goal-contract.json'), JSON.stringify({ version: 1, desired_end_state: 'bound contract' }))
+    const created = candidate(root, namespace, 'issue-47', 'run-a')
+
+    writeFileSync(join(root, '.pipeline/goal-contract.json'), JSON.stringify({ version: 2, desired_end_state: 'default changed' }))
+    expect(validateCandidate(created, { rootDir: root, repository: 'owner/repo', baseBranch: 'main', pipelineDir: '.pipeline/runs/issue-47/run-b' })).toMatchObject({ state: 'RESUMABLE_EXACT' })
+
+    writeFileSync(join(root, namespace, 'goal-contract.json'), JSON.stringify({ version: 2, desired_end_state: 'bound changed' }))
+    expect(validateCandidate(created, { rootDir: root, repository: 'owner/repo', baseBranch: 'main' })).toMatchObject({
+      state: 'RESUMABLE_AFTER_REVALIDATION',
+      reasons: ['goal contract changed'],
+    })
+  })
+
+  it('rejects arbitrary repository directories as pipeline state', () => {
+    const root = gitRoot()
+    const namespace = '.yalla-state/run-a'
+    mkdirSync(join(root, namespace), { recursive: true })
+    writeFileSync(join(root, namespace, 'goal-contract.json'), JSON.stringify({ version: 1, desired_end_state: 'custom state root' }))
+    expect(() => candidate(root, namespace)).toThrow('canonical .pipeline/runs')
+  })
+
   it('keeps auto-detected candidate identity valid after JSON persistence', () => {
     const root = gitRoot()
     const created = createCandidateIdentity({ rootDir: root, baseBranch: 'main', runId: 'run-1', issueId: 'issue-47' })
     writeCandidate(root, created)
-    const persisted = JSON.parse(readFileSync(join(root, '.pipeline/candidate.json'), 'utf8'))
+    const persisted = JSON.parse(readFileSync(join(root, defaultPipelineDir, 'candidate.json'), 'utf8'))
     expect(validateCandidate(persisted, { rootDir: root, baseBranch: 'main' })).toMatchObject({ state: 'RESUMABLE_EXACT' })
   })
 
@@ -131,8 +217,8 @@ describe('candidate integrity control plane', () => {
 
   it('rejects a declared repository mismatch and an unresolvable base branch', () => {
     const root = gitRoot()
-    expect(() => createCandidateIdentity({ rootDir: root, repository: 'other/repo', baseBranch: 'main' })).toThrow('does not match observed origin')
-    expect(() => createCandidateIdentity({ rootDir: root, repository: 'owner/repo', baseBranch: 'missing-base' })).toThrow('Unable to resolve a Git base SHA')
+    expect(() => createCandidateIdentity({ rootDir: root, repository: 'other/repo', baseBranch: 'main', issueId: 'issue-47', runId: 'run-1' })).toThrow('does not match observed origin')
+    expect(() => createCandidateIdentity({ rootDir: root, repository: 'owner/repo', baseBranch: 'missing-base', issueId: 'issue-47', runId: 'run-1' })).toThrow('Unable to resolve a Git base SHA')
   })
 
   it('binds repository identity to the remote host as well as owner and name', () => {
@@ -191,10 +277,11 @@ describe('candidate integrity control plane', () => {
 
   it('uses a fail-closed single-writer lock', () => {
     const root = gitRoot()
-    const first = acquireRunLock(root, 'first')
-    expect(() => acquireRunLock(root, 'second')).toThrow('already held by first')
+    const first = acquireRunLock(root, 'first', undefined, defaultPipelineDir)
+    expect(() => acquireRunLock(root, 'second', undefined, defaultPipelineDir)).toThrow('already held by first')
     releaseRunLock(first)
-    expect(existsSync(join(root, '.pipeline/run.lock'))).toBe(false)
+    expect(existsSync(join(root, defaultPipelineDir, 'run.lock'))).toBe(false)
+    expect(() => acquireRunLock(root, 'legacy-root')).toThrow('canonical pipeline issue/run namespace')
   })
 
   it('routes failure classes without treating every failure as a repair loop', () => {
@@ -253,16 +340,59 @@ describe('candidate integrity control plane', () => {
     writeFileSync(join(root, 'app.ts'), 'export const value = 2\n')
     expect(completeOperationReceipt({
       rootDir: root,
+      pipelineDir: defaultPipelineDir,
       operationId: 'open-1',
       capability: 'open_pr',
       action: 'open',
       target: 'pr-for-issue-47',
       status: 'succeeded',
     }).status).toBe('updated')
-    const receipts = JSON.parse(readFileSync(join(root, '.pipeline/operation-receipts.json'), 'utf8'))
+    const receipts = JSON.parse(readFileSync(join(root, defaultPipelineDir, 'operation-receipts.json'), 'utf8'))
     expect(receipts.receipts).toHaveLength(1)
     expect(receipts.receipts[0].status).toBe('succeeded')
     expect(receipts.receipts[0].execution_authority).toBe('local-configured-capability')
+  })
+
+  it('isolates operation receipts, remote jobs, and budgets by pipeline namespace', () => {
+    const root = gitRoot()
+    const firstNamespace = '.pipeline/runs/issue-47/run-a'
+    const secondNamespace = '.pipeline/runs/issue-47/run-b'
+    for (const namespace of [firstNamespace, secondNamespace]) mkdirSync(join(root, namespace), { recursive: true })
+    const candidates = [candidate(root, firstNamespace, 'issue-47', 'run-a'), candidate(root, secondNamespace, 'issue-47', 'run-b')]
+
+    for (const [index, created] of candidates.entries()) {
+      const pipelineDir = created.pipeline_dir
+      expect(recordOperationReceipt({
+        rootDir: root,
+        pipelineDir,
+        candidate: created,
+        allowedCapabilities: ['read_repo', 'write_worktree', 'open_pr'],
+        operationId: 'same-operation',
+        capability: 'open_pr',
+        action: 'open',
+        target: `pr-${index}`,
+      }).status).toBe('recorded')
+      expect(recordRemoteJob({
+        rootDir: root,
+        pipelineDir,
+        candidate: created,
+        operationId: 'same-job',
+        kind: 'full-suite',
+        artifactAction: 'built',
+        status: 'pending',
+        durationSeconds: 0,
+      }).status).toBe('recorded')
+    }
+
+    const budgets = { max_remote_jobs_per_candidate: 1, max_full_suites_per_candidate: 1, max_production_builds_per_candidate: 1 }
+    expect(checkRemoteJobBudget({ rootDir: root, pipelineDir: firstNamespace, candidate: candidates[0], operationId: 'another-job', kind: 'smoke', artifactAction: 'reused', budgets })).toMatchObject({ allowed: false, duplicate: false })
+    expect(checkRemoteJobBudget({ rootDir: root, pipelineDir: secondNamespace, candidate: candidates[1], operationId: 'same-job', kind: 'full-suite', artifactAction: 'built', budgets })).toMatchObject({ allowed: true, duplicate: true })
+    expect(() => recordRemoteJob({ rootDir: root, pipelineDir: secondNamespace, candidate: candidates[0], operationId: 'wrong-namespace', kind: 'smoke', artifactAction: 'reused', status: 'pending', durationSeconds: 0 })).toThrow(`refusing namespace ${secondNamespace}`)
+
+    const firstReceipts = JSON.parse(readFileSync(join(root, firstNamespace, 'operation-receipts.json'), 'utf8'))
+    const secondReceipts = JSON.parse(readFileSync(join(root, secondNamespace, 'operation-receipts.json'), 'utf8'))
+    expect(firstReceipts).toMatchObject({ pipeline_dir: firstNamespace, receipts: [{ target: 'pr-0', pipeline_dir: firstNamespace }] })
+    expect(secondReceipts).toMatchObject({ pipeline_dir: secondNamespace, receipts: [{ target: 'pr-1', pipeline_dir: secondNamespace }] })
   })
 
   it('maps known privileged commands to typed capabilities', () => {
@@ -316,7 +446,7 @@ describe('candidate integrity control plane', () => {
     expect(recordRemoteJob({ rootDir: root, candidate: created, operationId: 'build-1', kind: 'production-build', artifactAction: 'built', status: 'succeeded', durationSeconds: 600, cost: 1.2 }).status).toBe('updated')
     expect(recordRemoteJob({ rootDir: root, candidate: created, operationId: 'smoke-1', kind: 'smoke', artifactAction: 'reused', status: 'pending', durationSeconds: 0 }).status).toBe('recorded')
     expect(recordRemoteJob({ rootDir: root, candidate: created, operationId: 'smoke-1', kind: 'smoke', artifactAction: 'reused', status: 'succeeded', durationSeconds: 120 }).status).toBe('updated')
-    const telemetry = JSON.parse(readFileSync(join(root, '.pipeline/remote-jobs.json'), 'utf8'))
+    const telemetry = JSON.parse(readFileSync(join(root, defaultPipelineDir, 'remote-jobs.json'), 'utf8'))
     expect(telemetry.jobs).toEqual(expect.arrayContaining([expect.objectContaining({ execution_authority: 'none-local-telemetry-only' })]))
     expect(telemetry.summary).toEqual({ attempts: 2, remote_jobs: 2, pending: 0, succeeded: 2, failed: 0, blocked: 0, builds: 1, artifact_reuses: 1, duration_seconds: 720, known_cost: 1.2 })
   })

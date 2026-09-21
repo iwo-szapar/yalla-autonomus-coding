@@ -37,7 +37,7 @@ Run a section only when the touched files or workflow match its trigger. A docs-
 - [ ] Plan or PR states the intended outcome, target user/context, metric/proxy, and MVP boundary
 - [ ] Top kill-assumptions have cheap validation or are accepted risks
 - [ ] Acceptance criteria prove the intended behavior, not only implementation details
-- [ ] `.pipeline/product-intent.json` exists when the intent is non-obvious or review-relevant
+- [ ] `<run-state>/product-intent.json` exists when the intent is non-obvious or review-relevant
 - [ ] `intended-vs-implemented-check` is run and its verdict appears in review evidence
 
 ### Async Reliability (jobs, webhooks, cron, external APIs)
@@ -107,9 +107,9 @@ Use this before writing a PRD/plan, before testing, and during review. Map task-
 
 ## Architecture Alignment Test Evidence
 
-- [ ] `.pipeline/architecture-alignment.json` exists when any architecture-doc source-map row applies
+- [ ] `<run-state>/architecture-alignment.json` exists when any architecture-doc source-map row applies
 - [ ] The artifact lists relevant docs, changed code paths, alignment verdict, docs updated, and evidence
-- [ ] `.pipeline/test-evidence.json` includes architecture-doc alignment status, not just command results
+- [ ] `<run-state>/test-evidence.json` includes architecture-doc alignment status, not just command results
 - [ ] Tests cover behavior through the public seam used by the architecture doc claim
 - [ ] Claims that cannot be behavior-tested are recorded as unchanged-code evidence or accepted risk
 
@@ -126,7 +126,7 @@ Use these when the task triggers the relevant surface or failure mode. Mark `N/A
 - [ ] Existing PR updates fetch and address blocking review comments before shipping
 - [ ] PR readiness and post-push loops use `gh pr checks` as the source of truth
 - [ ] PR body identifies reviewer entry points, risky behavior changes, accepted risks, and test evidence
-- [ ] Final review/test/outcome artifacts bind to the same candidate ID/SHA; `yalla:run -- resume` is `RESUMABLE_EXACT`
+- [ ] Final review/test/outcome artifacts bind to the same candidate ID/SHA; `npm run yalla:run -- resume --pipeline-dir <run-state> --issue-id <issue-id> --run-id <run-id>` is `RESUMABLE_EXACT`
 - [ ] Failures are classified as candidate, baseline, infrastructure, identity, policy, or superseded before retry/repair
 - [ ] Parallel team work has non-overlapping path claims; single-agent work records a concrete N/A instead of creating lease ceremony
 - [ ] Merge conflict resolution stays minimal, leaves no markers, and regenerates lockfiles through package tools
@@ -136,8 +136,8 @@ Use these when the task triggers the relevant surface or failure mode. Mark `N/A
 
 Run only when the listed trigger applies. A generic `N/A` is not valid; write the concrete reason.
 
-- [ ] External API/SDK/provider/protocol/browser/platform/generated-setup behavior -> `.pipeline/external-grounding.json` names current official/upstream sources, the exact claims used, and implementation consequences
-- [ ] Preview/staging/production/remote proof claim -> `.pipeline/runtime-e2e-preflight.json` names the deployed target revision and base revision, safe environment shape, mutation guardrails, inherited baseline failures, and exact proves/does-not-prove limits
+- [ ] External API/SDK/provider/protocol/browser/platform/generated-setup behavior -> `<run-state>/external-grounding.json` names current official/upstream sources, the exact claims used, and implementation consequences
+- [ ] Preview/staging/production/remote proof claim -> `<run-state>/runtime-e2e-preflight.json` names the deployed target revision and base revision, safe environment shape, mutation guardrails, inherited baseline failures, and exact proves/does-not-prove limits
 - [ ] T1/T2 release work -> repository-owned release adapter declares immutable repository/project/team/target identity, typed immutable dependency versions, focused/full checks, smoke assertions, protected capabilities, and remote-job budgets; the local runner treats reservations as telemetry only, while an external operator-controlled executor independently runs the exact-candidate preflight and verifies approval before consequential execution
 - [ ] New or ported public route/API/CLI/job/webhook/cron -> surface parity names two nearest siblings and applies or justifies auth, rate-limit, error, telemetry, time-budget, and header behavior
 - [ ] Untrusted input or rendered/exported output -> trust map names each writer/hostile input neutralization and each consuming execution context/output guard

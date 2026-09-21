@@ -106,7 +106,7 @@ After PR creation, use:
 gh pr checks --json name,bucket,state,workflow,link
 ```
 
-Put check status in the PR body or a PR comment. Do not create a follow-up commit solely to update `.pipeline/ship-manifest.json` with the PR number or final check state.
+Put check status in the PR body or a PR comment. Do not create a follow-up commit solely to update `<run-state>/ship-manifest.json` with the PR number or final check state.
 
 ## Final Output Format
 

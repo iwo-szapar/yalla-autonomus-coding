@@ -15,13 +15,13 @@ The dry-run path must remain safe:
 
 - Resolve the target repo from `YALLA_REPO`, then `gh repo view`, then a placeholder.
 - Probe one canonical `issue-###`.
-- Write `.pipeline/autopilot-state.json` and `.pipeline/loop-telemetry.json`.
-- Acquire an exclusive local `.pipeline/run.lock` while replacing state, then release it.
-- Append the completed stop state to `.pipeline/run-log.jsonl`.
+- Write `.pipeline/runs/<issue-id>/autopilot/autopilot-state.json` and `loop-telemetry.json`.
+- Acquire the canonical namespace's exclusive local `run.lock` while replacing state, then release it.
+- Append the completed stop state to the same namespace's `run-log.jsonl`.
 - Make no GitHub mutations.
 - Never claim completion unless the run's proof-contract verdict is `PROVEN`.
 
-The queue dry-run writes `.pipeline/autopilot-queue-report.json`. In GitHub mode it uses `yalla-ready` as the default eligibility label and skips `blocked`, `needs-human`, and `do-not-autopilot` by default. In Linear mode it uses the configured `ready_states` plus any equivalent labels and writes the same local report before mutating Linear.
+The queue dry-run writes `.pipeline/runs/queue/autopilot/autopilot-queue-report.json`. In GitHub mode it uses `yalla-ready` as the default eligibility label and skips `blocked`, `needs-human`, and `do-not-autopilot` by default. In Linear mode it uses the configured `ready_states` plus any equivalent labels and writes the same local report before mutating Linear.
 
 ## Operating Levels
 
@@ -65,17 +65,17 @@ High-risk tasks should force `strict` even when the repo default is lower ceremo
 
 Scheduled runs need durable state so retries do not double-spend tokens or duplicate work.
 
-- `.pipeline/autopilot-state.json` - current stop state, logical lock owner, selected issue, allowed capabilities, and last safe checkpoint.
-- `.pipeline/loop-telemetry.json` - command results, iteration usage, side-effect attempts, and stop reason for the current attempt.
-- `.pipeline/run-log.jsonl` - append-only completed attempt states for audit and debugging.
-- `.pipeline/run.lock` - short-lived exclusive writer token. Its presence blocks another state writer; it is not evidence that a task is complete.
+- `.pipeline/runs/<issue-id>/autopilot/autopilot-state.json` - current stop state, logical lock owner, selected issue, allowed capabilities, and last safe checkpoint.
+- `.pipeline/runs/<issue-id>/autopilot/loop-telemetry.json` - command results, iteration usage, side-effect attempts, and stop reason for the current attempt.
+- `.pipeline/runs/<issue-id>/autopilot/run-log.jsonl` - append-only completed attempt states for audit and debugging.
+- `.pipeline/runs/<issue-id>/autopilot/run.lock` - short-lived exclusive writer token. Its presence blocks another state writer; it is not evidence that a task is complete.
 
 The current dry-run does not yet measure model tokens. `autopilot.token_budget`
 is a configured limit for later assisted/unattended runtimes, not a claim that a
 `.pipeline/token-budget.json` artifact is already enforced.
 
-Candidate-aware execution additionally uses `.pipeline/candidate.json`,
-candidate-bound artifact metadata, operation receipts, and remote-job telemetry.
+Candidate-aware execution additionally uses `.pipeline/runs/<issue-id>/autopilot/candidate.json`,
+candidate-bound artifact metadata, operation receipts, and remote-job telemetry in the same namespace.
 See `knowledge/yalla/ARTIFACTS.md`.
 
 State files are local by default. Commit them only when they explain a review decision or when the repo intentionally uses committed state for audit.

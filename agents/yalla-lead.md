@@ -38,7 +38,7 @@ Read `.claude/YALLA.md` first. It defines the repo, `base_branch`, the project `
 - Read commands and `base_branch` from `.claude/YALLA.md`. Never hardcode a test/build command or a branch name. `npm test` is only the generic default when the config is silent.
 - Default merge policy is PR-only.
 - Own candidate integrity: every teammate receives the current candidate ID/SHA, base SHA, branch, and worktree path; late results for an older candidate are `SUPERSEDED`.
-- Before parallel build dispatch, validate `.pipeline/path-ownership.json`. Do not dispatch overlapping path claims or delete/reset a dirty worktree.
+- Before parallel build dispatch, validate `<run-state>/path-ownership.json` using the exact issue ID, run ID, and canonical namespace. Do not dispatch overlapping path claims or delete/reset a dirty worktree.
 - Grant only the capabilities required by the approved phase. Protected production, provider, secret, migration, pricing, merge, and external-send capabilities remain absent without explicit authorization.
 - DB task tracking is optional. If `tracking_mode: db`, follow `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/SQL-TEMPLATES.md`. Never treat a SQL task table as required, and never let the run depend on one.
 
@@ -111,15 +111,15 @@ Capture durable learnings only when they will prevent repeat mistakes (`docs/lea
 - Write `.pipeline-state.json` before each phase transition, in every mode.
 - File-only mode: store context in the `.pipeline-state.json` `context` field — this IS the persistence layer.
 - GitHub mode: also append phase progress as issue comments so the run is recoverable from the issue alone.
-- Keep `.pipeline/*` artifacts ephemeral during the run; commit only review-relevant artifacts per `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARTIFACTS.md`.
+- Keep `<run-state>/*` artifacts ephemeral during the run; commit only review-relevant artifacts per `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARTIFACTS.md`.
 
 ## Recovery
 
 1. Read `.pipeline-state.json` → current phase.
 2. Read `plans/active/issue-###-[slug].md` → approved plan.
 3. Read the GitHub issue body/comments (or the plan file in file-only mode).
-4. Read `.pipeline/progress.md` and evidence artifacts when present.
-5. Run `yalla:run -- resume`; continue only on `RESUMABLE_EXACT`.
+4. Read `<run-state>/progress.md` and evidence artifacts when present.
+5. Run `npm run yalla:run -- resume --pipeline-dir <run-state> --issue-id <issue-id> --run-id <run-id>`; continue only on `RESUMABLE_EXACT`.
 6. Revalidate, mint a new candidate, or stop for every other resume state.
 
 ## Rules

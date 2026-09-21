@@ -50,7 +50,7 @@ verifiers:
   browser_interactions: "npm run test:e2e -- --grep @browser-interaction"
   perf: "npm run benchmark"
   docs: "npm run docs:check"
-  visual: ".pipeline/visual-evidence/"
+  visual: "<run-state>/visual-evidence/"
 ```
 
 These entries are planning/reporting hints. They make the verifier boundary explicit before a long-running loop starts, but they do not execute automatically. The agent still runs the appropriate command, saves the output, and maps it to the goal contract. See [`knowledge/yalla/VERIFIERS.md`](knowledge/yalla/VERIFIERS.md).
@@ -170,7 +170,7 @@ The full routing table is in [`knowledge/yalla/TASK-CLASSIFICATION.md`](knowledg
 
 ## The Proof Contract, evidence modes, and risk tiers
 
-Every run ends with a verdict in `.pipeline/outcome-evaluation.json`: exactly one of `PROVEN`, `NOT_PROVEN`, or `INCONCLUSIVE`. Only `PROVEN` may be called done — and `PROVEN` requires that every acceptance criterion is backed by valid evidence (a passing test, static check, browser/API probe, or smoke run), every required review check passes, and no remaining delta exists. Missing evidence never becomes `PROVEN`. The contract prefers deterministic proof: it won't accept a model judge where a concrete test or check could verify the behavior.
+Every run ends with a verdict in `<run-state>/outcome-evaluation.json`: exactly one of `PROVEN`, `NOT_PROVEN`, or `INCONCLUSIVE`. Only `PROVEN` may be called done — and `PROVEN` requires that every acceptance criterion is backed by valid evidence (a passing test, static check, browser/API probe, or smoke run), every required review check passes, and no remaining delta exists. Missing evidence never becomes `PROVEN`. The contract prefers deterministic proof: it won't accept a model judge where a concrete test or check could verify the behavior.
 
 Two knobs scale how heavy the proof apparatus is:
 
@@ -195,28 +195,32 @@ The proof artifacts tell a reviewer whether the work is proven. The operator art
 From the cloned Yalla repo, use:
 
 ```bash
-npm run yalla:run -- doctor --config /path/to/your-project/.claude/YALLA.md
-npm run yalla:run -- event --config /path/to/your-project/.claude/YALLA.md --event stage.started --phase plan --message "Planning started"
-npm run yalla:run -- checkpoint --config /path/to/your-project/.claude/YALLA.md --phase test --message "Focused tests passed"
-npm run yalla:run -- status --config /path/to/your-project/.claude/YALLA.md
-npm run yalla:run -- report --config /path/to/your-project/.claude/YALLA.md
-npm run yalla:run -- resume --config /path/to/your-project/.claude/YALLA.md
-npm run yalla:run -- rewind --config /path/to/your-project/.claude/YALLA.md --target plan
-npm run yalla:run -- export --config /path/to/your-project/.claude/YALLA.md
+ISSUE_ID=issue-123
+RUN_ID=attempt-1
+RUN_STATE=.pipeline/runs/$ISSUE_ID/$RUN_ID
+RUN_CONTEXT=(--pipeline-dir "$RUN_STATE" --issue-id "$ISSUE_ID" --run-id "$RUN_ID")
+npm run yalla:run -- doctor "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md
+npm run yalla:run -- event "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md --event stage.started --phase plan --message "Planning started"
+npm run yalla:run -- checkpoint "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md --phase test --message "Focused tests passed"
+npm run yalla:run -- status "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md
+npm run yalla:run -- report "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md
+npm run yalla:run -- resume "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md
+npm run yalla:run -- rewind "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md --target plan
+npm run yalla:run -- export "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md
 ```
 
-These helpers are intentionally local-first. They write `.pipeline/events.jsonl`, `.pipeline/checkpoints/*`, `.pipeline/latest-checkpoint.json`, `.pipeline/report.html`, and portable `.pipeline/export-*` bundles. `rewind` identifies the checkpoint to inspect; it does not reset branches or delete work. That keeps Yalla's recovery path explicit and prevents automation from hiding destructive Git operations behind a friendly command.
+These helpers are intentionally local-first. Select one canonical `.pipeline/runs/<issue-id>/<run-id>` namespace and pass the same issue ID, run ID, and state path to every command; they write events, checkpoints, the report, and portable export bundles only there. Root `.pipeline/*` artifacts are manual, read-only legacy evidence. `rewind` identifies the checkpoint to inspect; it does not reset branches or delete work. That keeps Yalla's recovery path explicit and prevents automation from hiding destructive Git operations behind a friendly command.
 
 For long-running autonomy, add these artifacts before or during the loop:
 
 ```bash
-npm run yalla:run -- goal --config /path/to/your-project/.claude/YALLA.md --message "Desired end state" --criterion "Measurable success" --constraint "Do not break X" --evidence "npm test"
-npm run yalla:run -- evaluate --config /path/to/your-project/.claude/YALLA.md --evaluator reviewer --verdict PASS --message "Evidence is sufficient"
-npm run yalla:run -- loop --config /path/to/your-project/.claude/YALLA.md
-npm run yalla:run -- mine-sessions --config /path/to/your-project/.claude/YALLA.md
+npm run yalla:run -- goal "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md --message "Desired end state" --criterion "Measurable success" --constraint "Do not break X" --evidence "npm test"
+npm run yalla:run -- evaluate "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md --evaluator reviewer --verdict PASS --message "Evidence is sufficient"
+npm run yalla:run -- loop "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md
+npm run yalla:run -- mine-sessions "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md
 ```
 
-`goal` writes `.pipeline/goal-contract.json`. `evaluate` writes `.pipeline/evaluator-results.json` and keeps evaluator judgment separate from executor changes. `loop` writes `.pipeline/loop-state.json` with the next non-destructive instruction. `mine-sessions` writes `.pipeline/session-mining-report.json` with suggested gotchas, project checks, or eval fixtures based on repeated failures.
+`goal` writes `<run-state>/goal-contract.json` and requires stable issue/run IDs. `evaluate` writes `<run-state>/evaluator-results.json` and keeps evaluator judgment separate from executor changes. `loop` writes `<run-state>/loop-state.json` with the next non-destructive instruction. `mine-sessions` writes `<run-state>/session-mining-report.json` with suggested gotchas, project checks, or eval fixtures based on repeated failures.
 
 ## How binary review works
 

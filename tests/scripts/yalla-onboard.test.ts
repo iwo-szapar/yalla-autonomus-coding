@@ -27,7 +27,7 @@ models:
   review: "opus"
 verifiers:
   api: "npm test"
-  visual: ".pipeline/visual-evidence/"
+  visual: "<run-state>/visual-evidence/"
 task_system:
   ready_label: yalla-ready
   block_labels: [blocked, needs-human]

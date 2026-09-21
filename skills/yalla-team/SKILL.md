@@ -22,7 +22,7 @@ The orchestrator role and exact subagent prompts live in `${CLAUDE_PLUGIN_ROOT}/
 - The configured tracker is the canonical task store. GitHub Issues are the default; Linear is allowed when `.claude/YALLA.md` sets `tracking_mode: linear`; DB mode is described in `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/SQL-TEMPLATES.md`.
 - Creator != reviewer: the context that writes code does not do final review.
 - Every teammate result names the candidate ID/SHA and worktree path it used. A result for an older candidate is `SUPERSEDED`, not feedback on the current head.
-- Before parallel build work, write `.pipeline/path-ownership.json` with repo-relative file/directory claims and run `npm run yalla:run -- ownership`. Conflicting claims block dispatch; ordinary single-agent `/yalla` runs do not need this artifact.
+- Before parallel build work, write `<run-state>/path-ownership.json` with repo-relative file/directory claims and run `npm run yalla:run -- ownership --pipeline-dir <run-state> --issue-id <issue-id> --run-id <run-id>`. Conflicting claims block dispatch; ordinary single-agent `/yalla` runs do not need this artifact.
 
 ## Flow
 
