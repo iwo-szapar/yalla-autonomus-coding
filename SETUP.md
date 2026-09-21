@@ -71,8 +71,12 @@ npm run yalla:onboard -- check --config /path/to/your-project/.claude/YALLA.md
 npm run yalla:onboard -- init --config /path/to/your-project/.claude/YALLA.md
 npm run yalla:onboard -- labels --dry-run --config /path/to/your-project/.claude/YALLA.md
 npm run yalla:onboard -- template --dry-run --config /path/to/your-project/.claude/YALLA.md
-npm run yalla:run -- doctor --config /path/to/your-project/.claude/YALLA.md
-npm run yalla:run -- goal --config /path/to/your-project/.claude/YALLA.md --message "Ship a verified small change" --criterion "tests pass" --evidence "npm test"
+ISSUE_ID=issue-123
+RUN_ID=attempt-1
+RUN_STATE=.pipeline/runs/$ISSUE_ID/$RUN_ID
+RUN_CONTEXT=(--pipeline-dir "$RUN_STATE" --issue-id "$ISSUE_ID" --run-id "$RUN_ID")
+npm run yalla:run -- doctor "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md
+npm run yalla:run -- goal "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md --message "Ship a verified small change" --criterion "tests pass" --evidence "npm test"
 ```
 
 ## First-run config
@@ -107,7 +111,7 @@ Here's what happens:
 5. **Test** — it runs your suite until green and records falsifiable evidence (`VERIFIED` / `NOT VERIFIED` / `INCONCLUSIVE`) for each claim.
 6. **Review** — independent reviewers each answer one binary question (security? complexity? correctness?). Any Fail blocks the ship and gets fixed. The author never reviews their own code.
 7. **Compound** — it captures any durable learning to its smallest lasting home.
-8. **Ship** — it writes `.pipeline/outcome-evaluation.json` with a `PROVEN` / `NOT_PROVEN` / `INCONCLUSIVE` verdict, commits the specific files, and **opens a PR — PR-only by default.** It won't merge unless you explicitly asked in this run.
+8. **Ship** — it writes `<run-state>/outcome-evaluation.json` with a `PROVEN` / `NOT_PROVEN` / `INCONCLUSIVE` verdict, commits the specific files, and **opens a PR — PR-only by default.** It won't merge unless you explicitly asked in this run.
 
 You approve once (the plan) and review one PR at the end. The middle runs itself. A run is only described as done when the verdict is `PROVEN`, and `PROVEN` is backed by the evidence artifacts, not by the agent's say-so.
 
@@ -116,23 +120,27 @@ For first-time setup, run `/onboard` before `/yalla`. It checks your config, lab
 For local run observability from the cloned Yalla repo:
 
 ```bash
-npm run yalla:run -- event --config /path/to/your-project/.claude/YALLA.md --event stage.started --phase plan --message "Planning started"
-npm run yalla:run -- checkpoint --config /path/to/your-project/.claude/YALLA.md --phase test --message "Focused tests passed"
-npm run yalla:run -- evaluate --config /path/to/your-project/.claude/YALLA.md --evaluator reviewer --verdict PASS --message "Evidence is sufficient"
-npm run yalla:run -- loop --config /path/to/your-project/.claude/YALLA.md
-npm run yalla:run -- status --config /path/to/your-project/.claude/YALLA.md
-npm run yalla:run -- report --config /path/to/your-project/.claude/YALLA.md
-npm run yalla:run -- mine-sessions --config /path/to/your-project/.claude/YALLA.md
-npm run yalla:run -- export --config /path/to/your-project/.claude/YALLA.md
+ISSUE_ID=issue-123
+RUN_ID=attempt-1
+RUN_STATE=.pipeline/runs/$ISSUE_ID/$RUN_ID
+RUN_CONTEXT=(--pipeline-dir "$RUN_STATE" --issue-id "$ISSUE_ID" --run-id "$RUN_ID")
+npm run yalla:run -- event "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md --event stage.started --phase plan --message "Planning started"
+npm run yalla:run -- checkpoint "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md --phase test --message "Focused tests passed"
+npm run yalla:run -- evaluate "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md --evaluator reviewer --verdict PASS --message "Evidence is sufficient"
+npm run yalla:run -- loop "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md
+npm run yalla:run -- status "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md
+npm run yalla:run -- report "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md
+npm run yalla:run -- mine-sessions "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md
+npm run yalla:run -- export "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md
 ```
 
-These helpers write `.pipeline/goal-contract.json`, `.pipeline/events.jsonl`, `.pipeline/checkpoints/*`, `.pipeline/latest-checkpoint.json`, `.pipeline/evaluator-results.json`, `.pipeline/loop-state.json`, `.pipeline/session-mining-report.json`, `.pipeline/report.html`, and optional `.pipeline/export-*` bundles. `resume` and `rewind` return instructions only; they do not run destructive Git commands.
+Choose one canonical state namespace per attempt and pass the exact issue ID, run ID, and derived `RUN_STATE` to every stateful helper. These helpers write the goal, events, checkpoints, evaluator/loop/session evidence, report, and optional export bundles only inside that namespace. Existing root artifacts are manual, read-only legacy evidence and cannot be selected by the runner. `resume` and `rewind` return instructions only; they do not run destructive Git commands.
 
 To resume an interrupted run:
 
 ```
 /yalla issue-123
-npm run yalla:run -- resume --config /path/to/your-project/.claude/YALLA.md
+npm run yalla:run -- resume "${RUN_CONTEXT[@]}" --config /path/to/your-project/.claude/YALLA.md
 ```
 
 ## Optional: run the eval harness
@@ -146,14 +154,14 @@ npm run eval:yalla:smoke   # all eval suites; fails if any suite fails
 npm test                   # the unit tests behind the runners
 ```
 
-Single-issue autopilot dry-run — probes one issue, writes `.pipeline/autopilot-state.json` and telemetry, mutates nothing on GitHub:
+Single-issue autopilot dry-run — probes one issue, writes state and telemetry under `.pipeline/runs/<issue-id>/autopilot/`, and mutates nothing on GitHub:
 
 ```bash
 npm run yalla:autopilot -- run --issue issue-### --mode dry-run
 npm run yalla:autopilot -- queue --mode dry-run
 ```
 
-The queue command writes `.pipeline/autopilot-queue-report.json`, selects from issues labeled `yalla-ready`, and skips block labels such as `blocked`, `needs-human`, and `do-not-autopilot`. If you want scheduled or unattended operation, follow [`docs/autopilot/README.md`](docs/autopilot/README.md) and complete [`docs/autopilot/readiness-checklist.md`](docs/autopilot/readiness-checklist.md) before allowing any mode beyond dry-run/report-only.
+The queue command writes `.pipeline/runs/queue/autopilot/autopilot-queue-report.json`, selects from issues labeled `yalla-ready`, and skips block labels such as `blocked`, `needs-human`, and `do-not-autopilot`. If you want scheduled or unattended operation, follow [`docs/autopilot/README.md`](docs/autopilot/README.md) and complete [`docs/autopilot/readiness-checklist.md`](docs/autopilot/readiness-checklist.md) before allowing any mode beyond dry-run/report-only.
 
 You don't need any of this to use Yalla day to day. It's there to keep the proof contract honest as the pipeline evolves.
 
@@ -178,6 +186,6 @@ Set `tracking_mode` in `YALLA.md`.
 
 **Plan never appears / it just starts coding** — the task likely classified as `tiny-hotfix`, which skips full plan ceremony by design. For the full adversarial plan on any task, use `/yalla-plan <task>`.
 
-**Run says `NOT_PROVEN` or `INCONCLUSIVE`** — that's the proof contract doing its job, not a bug. Read `.pipeline/outcome-evaluation.json`: it names the remaining delta or the human decision still needed. `INCONCLUSIVE` still opens a PR, clearly labeled.
+**Run says `NOT_PROVEN` or `INCONCLUSIVE`** — that's the proof contract doing its job, not a bug. Read `<run-state>/outcome-evaluation.json`: it names the remaining delta or the human decision still needed. `INCONCLUSIVE` still opens a PR, clearly labeled.
 
 **Engine update didn't take** — re-run `install.sh`; it refreshes `skills/`, `agents/`, and `knowledge/yalla/` but preserves your `YALLA.md`.

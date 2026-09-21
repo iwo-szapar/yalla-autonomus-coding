@@ -52,8 +52,8 @@ Use the plan's `Risk-Triggered Gates` section, the project's `risk_gates` in `.c
 3. Check the project's conventions doc (`CLAUDE.md` / `AGENTS.md`) and `.claude/YALLA.md` for relevant rules and gotchas
 4. Read relevant `docs/architecture/` files from the plan's `Architecture Alignment` section or `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/PROJECT-CHECKS.md`
 5. Understand the feature's purpose from the plan summary
-6. Read `.pipeline/acceptance-trace.json`, `.pipeline/product-intent.json`, `.pipeline/architecture-alignment.json`, and `.pipeline/test-evidence.json` if present
-7. Compare each proof artifact's candidate metadata with `.pipeline/candidate.json`. Return `SUPERSEDED` instead of Pass/Fail when the review target moved.
+6. Resolve the exact issue/run namespace and read its `acceptance-trace.json`, `product-intent.json`, `architecture-alignment.json`, and `test-evidence.json` if present; never combine sibling-run evidence
+7. Compare each proof artifact's candidate metadata and `pipeline_dir` with `<run-state>/candidate.json`. Return `SUPERSEDED` instead of Pass/Fail when the review target moved.
 
 ### Step 2: Apply Your Check
 

@@ -2,7 +2,8 @@
 
 import { execFile } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
-import { basename, resolve } from 'node:path'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { basename, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { loadYallaConfig, type LoadedYallaConfig } from './yalla-config.js'
 import {
@@ -13,6 +14,7 @@ import {
   atomicWriteJson,
   atomicWriteText,
   bindArtifact,
+  canonicalPipelineStateDir,
   createCandidateIdentity,
   checkRemoteJobBudget,
   completeOperationReceipt,
@@ -26,6 +28,7 @@ import {
   readCandidate,
   recordOperationReceipt,
   recordRemoteJob,
+  resolvePipelineStateDir,
   listMaterialChangedPaths,
   routeFailure,
   validateCandidate,
@@ -77,6 +80,7 @@ type RunOptions = {
   command: 'event' | 'checkpoint' | 'status' | 'report' | 'doctor' | 'resume' | 'rewind' | 'export' | 'goal' | 'candidate' | 'baseline' | 'preflight' | 'stamp' | 'ownership' | 'evaluate' | 'loop' | 'operation' | 'remote-job' | 'mine-sessions'
   rootDir?: string
   configPath?: string
+  pipelineDir?: string
   event?: string
   phase?: string
   runId?: string
@@ -106,6 +110,12 @@ type RunOptions = {
   now?: () => string
 }
 
+type RunContext = {
+  rootDir: string
+  pipelineDir: string
+  pipelinePath: string
+}
+
 export type YallaRunResult = {
   exitCode: number
   eventPath?: string
@@ -129,13 +139,83 @@ export type YallaRunResult = {
 const PHASE_ORDER: RunPhase[] = ['classify', 'track', 'plan', 'work', 'test', 'review', 'compound', 'ship']
 const MODEL_KEYS = new Set(['classify', 'plan', 'implement', 'test', 'review', 'summarize'])
 const VERIFIER_KEYS = new Set(['api', 'ui', 'perf', 'docs', 'research', 'visual', 'benchmark', 'security', 'accessibility'])
-const MUTATING_RUN_COMMANDS = new Set<RunOptions['command']>(['event', 'checkpoint', 'report', 'export', 'goal', 'candidate', 'baseline', 'preflight', 'stamp', 'ownership', 'evaluate', 'loop', 'operation', 'remote-job', 'mine-sessions'])
+const MUTATING_RUN_COMMANDS = new Set<RunOptions['command']>(['event', 'checkpoint', 'report', 'export', 'goal', 'candidate', 'baseline', 'stamp', 'ownership', 'evaluate', 'loop', 'operation', 'remote-job', 'mine-sessions'])
 const ARTIFACT_INPUTS: Record<string, string[]> = {
-  '.pipeline/classification.json': ['.pipeline/goal-contract.json'],
-  '.pipeline/acceptance-trace.json': ['.pipeline/goal-contract.json'],
-  '.pipeline/test-evidence.json': ['.pipeline/goal-contract.json', '.pipeline/baseline.json', '.pipeline/acceptance-trace.json'],
-  '.pipeline/review-results.json': ['.pipeline/goal-contract.json', '.pipeline/baseline.json', '.pipeline/acceptance-trace.json', '.pipeline/test-evidence.json'],
-  '.pipeline/outcome-evaluation.json': ['.pipeline/goal-contract.json', '.pipeline/classification.json', '.pipeline/baseline.json', '.pipeline/acceptance-trace.json', '.pipeline/test-evidence.json', '.pipeline/review-results.json'],
+  'classification.json': ['goal-contract.json'],
+  'acceptance-trace.json': ['goal-contract.json'],
+  'test-evidence.json': ['goal-contract.json', 'baseline.json', 'acceptance-trace.json'],
+  'review-results.json': ['goal-contract.json', 'baseline.json', 'acceptance-trace.json', 'test-evidence.json'],
+  'outcome-evaluation.json': ['goal-contract.json', 'classification.json', 'baseline.json', 'acceptance-trace.json', 'test-evidence.json', 'review-results.json'],
+}
+
+const runContextStorage = new AsyncLocalStorage<RunContext>()
+
+function activeRunContext(rootDir: string): RunContext {
+  const active = runContextStorage.getStore()
+  if (active) return active
+  const state = resolvePipelineStateDir(rootDir)
+  return { rootDir, pipelineDir: state.absolute, pipelinePath: state.relative }
+}
+
+function pipelineFile(rootDir: string, name: string) {
+  return resolve(activeRunContext(rootDir).pipelineDir, name)
+}
+
+function pipelineRef(rootDir: string, name: string) {
+  return `${activeRunContext(rootDir).pipelinePath}/${name}`
+}
+
+function validateRunNamespace(context: RunContext, options: RunOptions): string | undefined {
+  const goalPath = resolve(context.pipelineDir, 'goal-contract.json')
+  const candidatePath = resolve(context.pipelineDir, 'candidate.json')
+  const goal = readJson(goalPath)
+  const candidate = readJson(candidatePath)
+  const issueId = String(options.issueId ?? '').trim()
+  const runId = String(options.runId ?? '').trim()
+
+  if (existsSync(goalPath) && !goal) return `POLICY_BLOCKED: ${context.pipelinePath}/goal-contract.json is invalid JSON; preserve or repair it before mutation.`
+  if (existsSync(candidatePath) && !candidate) return `POLICY_BLOCKED: ${context.pipelinePath}/candidate.json is invalid JSON; preserve or repair it before mutation.`
+  if (options.command === 'goal' && !goal && existsSync(context.pipelineDir)) {
+    const foreignArtifacts = listDirectoryFiles(context.pipelineDir)
+    if (foreignArtifacts.length) return `POLICY_BLOCKED: ${context.pipelinePath} already contains unbound evidence (${foreignArtifacts.join(', ')}); choose a fresh --pipeline-dir.`
+  }
+
+  const validateIdentity = (document: Record<string, unknown> | null, label: string) => {
+    if (!document) return undefined
+    const storedIssue = String(document.issue_id ?? '').trim()
+    const storedRun = String(document.run_id ?? '').trim()
+    const storedPipeline = String(document.pipeline_dir ?? '').trim()
+    if (!storedIssue || !storedRun || !storedPipeline) {
+      return `POLICY_BLOCKED: ${context.pipelinePath}/${label} is legacy or unbound state. Preserve it as read-only evidence or choose a fresh --pipeline-dir.`
+    }
+    if (storedPipeline !== context.pipelinePath) return `IDENTITY_MISMATCH: ${label} is bound to pipeline directory ${storedPipeline}, not ${context.pipelinePath}.`
+    if (storedIssue !== issueId) return `IDENTITY_MISMATCH: ${label} belongs to issue ${storedIssue}, not ${issueId}.`
+    if (storedRun !== runId) return `IDENTITY_MISMATCH: ${label} belongs to run ${storedRun}, not ${runId}.`
+    return undefined
+  }
+
+  const goalError = validateIdentity(goal, 'goal-contract.json')
+  if (goalError) return goalError
+  const candidateError = validateIdentity(candidate, 'candidate.json')
+  if (candidateError) return candidateError
+
+  if (options.command !== 'goal' && options.command !== 'doctor' && !goal) {
+    return `POLICY_BLOCKED: create ${context.pipelinePath}/goal-contract.json with stable issue/run identity before ${options.command}.`
+  }
+  if (options.command === 'candidate' && (goal?.issue_id !== issueId || goal?.run_id !== runId || goal?.pipeline_dir !== context.pipelinePath)) {
+    return 'IDENTITY_MISMATCH: candidate identity must exactly match the active goal contract issue, run, and pipeline directory.'
+  }
+  return undefined
+}
+
+function resolveArtifactTarget(rootDir: string, requested: string | undefined, fallback: string) {
+  const context = activeRunContext(rootDir)
+  const normalized = String(requested || fallback).replaceAll('\\', '/')
+  const name = normalized.includes('/') ? relative(context.pipelinePath, normalized).replaceAll('\\', '/') : normalized
+  if (!name || name === '..' || name.startsWith('../') || name.includes('/') || !name.endsWith('.json')) {
+    throw new Error(`Artifact target must be a JSON file directly inside ${context.pipelinePath}.`)
+  }
+  return { name, path: resolve(context.pipelineDir, name), reference: `${context.pipelinePath}/${name}` }
 }
 
 const PORTABLE_GATE_BINDINGS = [
@@ -156,6 +236,7 @@ function parseArgs(argv: string[]): RunOptions {
   for (let index = 1; index < argv.length; index++) {
     const arg = argv[index]
     if (arg === '--config') options.configPath = argv[++index] ?? ''
+    else if (arg === '--pipeline-dir') options.pipelineDir = argv[++index] ?? ''
     else if (arg === '--event') options.event = argv[++index] ?? ''
     else if (arg === '--phase') options.phase = argv[++index] ?? ''
     else if (arg === '--message') options.message = argv[++index] ?? ''
@@ -207,7 +288,21 @@ export async function runYallaRun(options: RunOptions): Promise<YallaRunResult> 
   const now = options.now ?? (() => new Date().toISOString())
   const commandRunner = options.commandRunner ?? defaultCommandRunner
 
+  if (options.command === 'preflight') return runReleasePreflight()
+
+  let state: ReturnType<typeof resolvePipelineStateDir>
+  try {
+    const canonicalState = canonicalPipelineStateDir(options.issueId, options.runId)
+    state = resolvePipelineStateDir(rootDir, options.pipelineDir ?? canonicalState)
+    if (state.relative !== canonicalState) throw new Error(`Issue/run identity requires pipeline directory ${canonicalState}, not ${state.relative}.`)
+  } catch (error) {
+    return { exitCode: 1, instruction: `IDENTITY_MISMATCH: ${error instanceof Error ? error.message : String(error)}` }
+  }
+  const context: RunContext = { rootDir, pipelineDir: state.absolute, pipelinePath: state.relative }
+
   const execute = async () => {
+    const namespaceError = validateRunNamespace(context, options)
+    if (namespaceError) return { exitCode: 1, instruction: namespaceError }
     if (options.command === 'event') return recordEvent(rootDir, options, now)
     if (options.command === 'checkpoint') return writeCheckpoint(rootDir, loadedConfig, options, now)
     if (options.command === 'status') return readStatus(rootDir, loadedConfig)
@@ -219,7 +314,6 @@ export async function runYallaRun(options: RunOptions): Promise<YallaRunResult> 
     if (options.command === 'goal') return writeGoalContract(rootDir, loadedConfig, options, now)
     if (options.command === 'candidate') return writeCandidateIdentity(rootDir, loadedConfig, options, now)
     if (options.command === 'baseline') return writeBaseline(rootDir, loadedConfig, options, now)
-    if (options.command === 'preflight') return runReleasePreflight()
     if (options.command === 'stamp') return stampArtifact(rootDir, loadedConfig, options, now)
     if (options.command === 'ownership') return validateOwnership(rootDir, loadedConfig, options, now)
     if (options.command === 'evaluate') return writeEvaluatorResult(rootDir, loadedConfig, options, now)
@@ -229,21 +323,28 @@ export async function runYallaRun(options: RunOptions): Promise<YallaRunResult> 
     return writeSessionMiningReport(rootDir, loadedConfig, now)
   }
 
-  if (MUTATING_RUN_COMMANDS.has(options.command)) return withRunLock(rootDir, `yalla-run:${options.command}`, execute)
-  return execute()
+  return runContextStorage.run(context, async () => {
+    try {
+      if (MUTATING_RUN_COMMANDS.has(options.command)) return await withRunLock(rootDir, `yalla-run:${options.command}`, execute, context.pipelineDir)
+      return await execute()
+    } catch (error) {
+      return { exitCode: 1, instruction: error instanceof Error ? error.message : String(error) }
+    }
+  })
 }
 
 function recordEvent(rootDir: string, options: RunOptions, now: () => string): YallaRunResult {
   const pipelineDir = ensurePipeline(rootDir)
   const path = resolve(pipelineDir, 'events.jsonl')
-  const candidate = readCandidate(rootDir)
+  const candidate = readCandidate(rootDir, activeRunContext(rootDir).pipelineDir)
+  const goal = readJson(pipelineFile(rootDir, 'goal-contract.json'))
   const event: YallaRunEvent = {
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     ts: now(),
     event: options.event || 'run.note',
     phase: options.phase,
-    run_id: options.runId ?? candidate?.run_id,
-    properties: { message: options.message ?? '', candidate_id: candidate?.candidate_id ?? null, candidate_sha: candidate?.head_sha ?? null },
+    run_id: options.runId ?? candidate?.run_id ?? String(goal?.run_id ?? ''),
+    properties: { message: options.message ?? '', issue_id: options.issueId ?? candidate?.issue_id ?? goal?.issue_id ?? null, pipeline_dir: activeRunContext(rootDir).pipelinePath, candidate_id: candidate?.candidate_id ?? null, candidate_sha: candidate?.head_sha ?? null },
   }
   writeFileSync(path, `${JSON.stringify(event)}\n`, { flag: 'a' })
   return { exitCode: 0, eventPath: path, status: event as unknown as Record<string, unknown> }
@@ -255,7 +356,7 @@ function writeCheckpoint(rootDir: string, loadedConfig: LoadedYallaConfig, optio
   mkdirSync(checkpointsDir, { recursive: true })
   const phase = normalizePhase(options.phase)
   const status = buildStatus(rootDir, loadedConfig)
-  const candidate = readCandidate(rootDir)
+  const candidate = readCandidate(rootDir, activeRunContext(rootDir).pipelineDir)
   const path = resolve(checkpointsDir, `${String(Date.now())}-${phase}.json`)
   const checkpointContent = {
     schema_version: CONTROL_SCHEMA_VERSION,
@@ -268,7 +369,7 @@ function writeCheckpoint(rootDir: string, loadedConfig: LoadedYallaConfig, optio
     artifacts: listPipelineArtifacts(rootDir),
     path,
   }
-  const checkpoint = candidate ? bindArtifact(checkpointContent, candidate, 'yalla-run:checkpoint', ['.pipeline/goal-contract.json'], now) : checkpointContent
+  const checkpoint = candidate ? bindArtifact(checkpointContent, candidate, 'yalla-run:checkpoint', [pipelineRef(rootDir, 'goal-contract.json')], now) : checkpointContent
   atomicWriteJson(path, checkpoint)
   atomicWriteJson(resolve(pipelineDir, 'latest-checkpoint.json'), checkpoint)
   recordEvent(rootDir, { ...options, command: 'event', event: 'checkpoint.completed', message: options.message }, now)
@@ -280,14 +381,14 @@ function readStatus(rootDir: string, loadedConfig: LoadedYallaConfig): YallaRunR
 }
 
 function buildStatus(rootDir: string, loadedConfig?: LoadedYallaConfig) {
-  const latest = readJson(resolve(rootDir, '.pipeline/latest-checkpoint.json'))
-  const classification = readJson(resolve(rootDir, '.pipeline/classification.json'))
-  const outcome = readJson(resolve(rootDir, '.pipeline/outcome-evaluation.json'))
-  const acceptance = readJson(resolve(rootDir, '.pipeline/acceptance-trace.json'))
-  const review = readJson(resolve(rootDir, '.pipeline/review-results.json'))
-  const goal = readJson(resolve(rootDir, '.pipeline/goal-contract.json'))
-  const evaluator = readJson(resolve(rootDir, '.pipeline/evaluator-results.json'))
-  const candidate = readCandidate(rootDir)
+  const latest = readJson(pipelineFile(rootDir, 'latest-checkpoint.json'))
+  const classification = readJson(pipelineFile(rootDir, 'classification.json'))
+  const outcome = readJson(pipelineFile(rootDir, 'outcome-evaluation.json'))
+  const acceptance = readJson(pipelineFile(rootDir, 'acceptance-trace.json'))
+  const review = readJson(pipelineFile(rootDir, 'review-results.json'))
+  const goal = readJson(pipelineFile(rootDir, 'goal-contract.json'))
+  const evaluator = readJson(pipelineFile(rootDir, 'evaluator-results.json'))
+  const candidate = readCandidate(rootDir, activeRunContext(rootDir).pipelineDir)
   const candidateValidation = candidate ? validateCandidate(candidate, candidateValidationOptions(rootDir, loadedConfig, candidate)) : null
   const checkpointFreshness = artifactFreshness(latest, candidate)
   const outcomeFreshness = artifactFreshness(outcome, candidate)
@@ -305,6 +406,9 @@ function buildStatus(rootDir: string, loadedConfig?: LoadedYallaConfig) {
   return {
     schema_version: CONTROL_SCHEMA_VERSION,
     yalla_version: YALLA_CONTROL_VERSION,
+    pipeline_dir: activeRunContext(rootDir).pipelinePath,
+    issue_id: goal?.issue_id ?? null,
+    run_id: goal?.run_id ?? null,
     phase,
     verdict,
     candidate_id: candidate?.candidate_id ?? null,
@@ -384,7 +488,7 @@ async function runDoctor(rootDir: string, loadedConfig: LoadedYallaConfig, comma
   } else {
     checks.push({ name: 'release_adapter', status: 'warn', detail: 'No release adapter configured; valid for T0 work' })
   }
-  const candidate = readCandidate(rootDir)
+  const candidate = readCandidate(rootDir, activeRunContext(rootDir).pipelineDir)
   if (candidate) {
     const validation = validateCandidate(candidate, candidateValidationOptions(rootDir, loadedConfig, candidate))
     checks.push({ name: 'candidate_identity', status: validation.state === 'RESUMABLE_EXACT' ? 'pass' : 'fail', detail: `${validation.state}${validation.reasons.length ? `: ${validation.reasons.join('; ')}` : ''}` })
@@ -395,7 +499,8 @@ async function runDoctor(rootDir: string, loadedConfig: LoadedYallaConfig, comma
   checks.push({ name: 'git_repo', status: git.exitCode === 0 ? 'pass' : 'fail', detail: git.exitCode === 0 ? 'Git repository detected' : 'Not inside a Git repository' })
   const gh = await commandRunner('gh', ['auth', 'status'])
   checks.push({ name: 'github_auth', status: gh.exitCode === 0 ? 'pass' : 'warn', detail: gh.exitCode === 0 ? 'gh authenticated' : 'gh unavailable or unauthenticated' })
-  checks.push({ name: 'pipeline_dir', status: existsSync(resolve(rootDir, '.pipeline')) ? 'pass' : 'warn', detail: existsSync(resolve(rootDir, '.pipeline')) ? '.pipeline exists' : '.pipeline will be created on first run event' })
+  const state = activeRunContext(rootDir)
+  checks.push({ name: 'pipeline_dir', status: existsSync(state.pipelineDir) ? 'pass' : 'warn', detail: existsSync(state.pipelineDir) ? `${state.pipelinePath} exists` : `${state.pipelinePath} will be created by the goal command` })
   const hasFailure = checks.some(check => check.status === 'fail')
   return { exitCode: hasFailure ? 1 : 0, checks }
 }
@@ -414,7 +519,7 @@ function resumeInstruction(rootDir: string, loadedConfig: LoadedYallaConfig): Ya
 
 function rewindInstruction(rootDir: string, target?: string): YallaRunResult {
   const checkpoints = listCheckpoints(rootDir)
-  if (!checkpoints.length) return { exitCode: 1, instruction: 'No checkpoints found in .pipeline/checkpoints.' }
+  if (!checkpoints.length) return { exitCode: 1, instruction: `No checkpoints found in ${activeRunContext(rootDir).pipelinePath}/checkpoints.` }
   const selected = target ? checkpoints.find(path => basename(path).includes(target)) : checkpoints.at(-2) ?? checkpoints.at(0)
   if (!selected) return { exitCode: 1, instruction: `No checkpoint matched ${target}. Available: ${checkpoints.map(path => basename(path)).join(', ')}` }
   return {
@@ -446,6 +551,9 @@ function writeGoalContract(rootDir: string, loadedConfig: LoadedYallaConfig, opt
     yalla_version: YALLA_CONTROL_VERSION,
     version: 1,
     created_at: now(),
+    issue_id: options.issueId,
+    run_id: options.runId,
+    pipeline_dir: activeRunContext(rootDir).pipelinePath,
     desired_end_state: options.message || 'Describe the desired end state before implementation starts.',
     success_criteria: cleanList(options.criteria),
     constraints: cleanList(options.constraint),
@@ -464,8 +572,8 @@ function writeGoalContract(rootDir: string, loadedConfig: LoadedYallaConfig, opt
 }
 
 function writeCandidateIdentity(rootDir: string, loadedConfig: LoadedYallaConfig, options: RunOptions, now: () => string): YallaRunResult {
-  if (!existsSync(resolve(rootDir, '.pipeline/goal-contract.json'))) {
-    return { exitCode: 1, instruction: 'Create `.pipeline/goal-contract.json` before initializing a candidate.' }
+  if (!existsSync(pipelineFile(rootDir, 'goal-contract.json'))) {
+    return { exitCode: 1, instruction: `Create ${pipelineRef(rootDir, 'goal-contract.json')} before initializing a candidate.` }
   }
   try {
     const candidate = createCandidateIdentity({
@@ -474,11 +582,12 @@ function writeCandidateIdentity(rootDir: string, loadedConfig: LoadedYallaConfig
       baseBranch: loadedConfig.config.baseBranch ?? 'main',
       runId: options.runId,
       issueId: options.issueId,
+      pipelineDir: activeRunContext(rootDir).pipelineDir,
       configPath: loadedConfig.path,
       releaseAdapterPath: loadedConfig.config.releaseAdapterPath,
       now,
     })
-    const candidatePath = writeCandidate(rootDir, candidate)
+    const candidatePath = writeCandidate(rootDir, candidate, activeRunContext(rootDir).pipelineDir)
     recordEvent(rootDir, { ...options, command: 'event', event: 'candidate.created', phase: options.phase ?? 'work', message: candidate.candidate_id }, now)
     return { exitCode: 0, candidatePath, status: candidate as unknown as Record<string, unknown> }
   } catch (error) {
@@ -498,7 +607,7 @@ function writeBaseline(rootDir: string, loadedConfig: LoadedYallaConfig, options
     inherited_failures: cleanList(options.finding),
     note: options.message ?? '',
   }
-  const baseline = bindArtifact(baselineContent, candidateResult.candidate, 'yalla-run:baseline', ['.pipeline/goal-contract.json'], now)
+  const baseline = bindArtifact(baselineContent, candidateResult.candidate, 'yalla-run:baseline', [pipelineRef(rootDir, 'goal-contract.json')], now)
   atomicWriteJson(path, baseline)
   recordEvent(rootDir, { ...options, command: 'event', event: 'baseline.captured', phase: options.phase ?? 'test', message: `${baseline.inherited_failures.length} inherited failure(s)` }, now)
   return { exitCode: 0, baselinePath: path, status: baseline }
@@ -514,23 +623,34 @@ function runReleasePreflight(): YallaRunResult {
 function stampArtifact(rootDir: string, loadedConfig: LoadedYallaConfig, options: RunOptions, now: () => string): YallaRunResult {
   const candidateResult = requireExactCandidate(rootDir, loadedConfig)
   if (!candidateResult.candidate) return { exitCode: 1, instruction: candidateResult.instruction }
-  const target = String(options.target ?? '').replaceAll('\\', '/')
-  if (!target.startsWith('.pipeline/') || target.includes('..') || !target.endsWith('.json')) {
-    return { exitCode: 1, instruction: 'stamp requires --target .pipeline/<artifact>.json inside the active repository.' }
+  let artifact: ReturnType<typeof resolveArtifactTarget>
+  try {
+    artifact = resolveArtifactTarget(rootDir, options.target, '')
+  } catch (error) {
+    return { exitCode: 1, instruction: error instanceof Error ? error.message : String(error) }
   }
-  const path = resolve(rootDir, target)
-  if (target === '.pipeline/release-preflight.json' || target === '.pipeline/preflight-output.json') {
-    return { exitCode: 1, instruction: `${target} is external-controller evidence and cannot be created or stamped by the local Yalla runner.` }
+  const { name: target, path, reference } = artifact
+  if (target === 'release-preflight.json' || target === 'preflight-output.json') {
+    return { exitCode: 1, instruction: `${reference} is external-controller evidence and cannot be created or stamped by the local Yalla runner.` }
   }
   const document = readJson(path)
-  if (!document) return { exitCode: 1, instruction: `Artifact is missing or invalid JSON: ${target}` }
-  const inputPaths = [...new Set([...(ARTIFACT_INPUTS[target] ?? ['.pipeline/goal-contract.json', '.pipeline/baseline.json']), ...cleanList(options.input)])]
-  const missingInputs = inputPaths.filter(inputPath => !readJson(resolve(rootDir, inputPath)))
-  if (missingInputs.length) return { exitCode: 1, instruction: `Cannot bind ${target}; required inputs are missing or invalid: ${missingInputs.join(', ')}` }
-  const staleInputs = inputPaths
-    .filter(inputPath => inputPath !== '.pipeline/goal-contract.json')
-    .filter(inputPath => artifactFreshness(readJson(resolve(rootDir, inputPath)), candidateResult.candidate).status !== 'CURRENT')
-  if (staleInputs.length) return { exitCode: 1, instruction: `Cannot bind ${target}; required inputs are stale or unbound: ${staleInputs.join(', ')}` }
+  if (!document) return { exitCode: 1, instruction: `Artifact is missing or invalid JSON: ${reference}` }
+  const requestedInputs = [...(ARTIFACT_INPUTS[target] ?? ['goal-contract.json', 'baseline.json']), ...cleanList(options.input)]
+  let inputArtifacts: Array<ReturnType<typeof resolveArtifactTarget>>
+  try {
+    inputArtifacts = [...new Map(requestedInputs.map(input => {
+      const resolved = resolveArtifactTarget(rootDir, input, '')
+      return [resolved.name, resolved]
+    })).values()]
+  } catch (error) {
+    return { exitCode: 1, instruction: error instanceof Error ? error.message : String(error) }
+  }
+  const missingInputs = inputArtifacts.filter(input => !readJson(input.path))
+  if (missingInputs.length) return { exitCode: 1, instruction: `Cannot bind ${reference}; required inputs are missing or invalid: ${missingInputs.map(input => input.reference).join(', ')}` }
+  const staleInputs = inputArtifacts
+    .filter(input => input.name !== 'goal-contract.json')
+    .filter(input => artifactFreshness(readJson(input.path), candidateResult.candidate).status !== 'CURRENT')
+  if (staleInputs.length) return { exitCode: 1, instruction: `Cannot bind ${reference}; required inputs are stale or unbound: ${staleInputs.map(input => input.reference).join(', ')}` }
   const proofError = validateProofArtifact(target, document, rootDir, candidateResult.candidate)
   if (proofError) return { exitCode: 1, instruction: proofError }
   const stampedContent: Record<string, unknown> = {
@@ -538,7 +658,7 @@ function stampArtifact(rootDir: string, loadedConfig: LoadedYallaConfig, options
     schema_version: document.schema_version ?? CONTROL_SCHEMA_VERSION,
   }
   delete stampedContent._meta
-  const stamped = bindArtifact(stampedContent, candidateResult.candidate, options.message || `yalla-run:stamp:${target}`, inputPaths, now)
+  const stamped = bindArtifact(stampedContent, candidateResult.candidate, options.message || `yalla-run:stamp:${reference}`, inputArtifacts.map(input => input.reference), now)
   atomicWriteJson(path, stamped)
   return { exitCode: 0, artifactPath: path, status: stamped }
 }
@@ -546,11 +666,13 @@ function stampArtifact(rootDir: string, loadedConfig: LoadedYallaConfig, options
 function validateOwnership(rootDir: string, loadedConfig: LoadedYallaConfig, options: RunOptions, now: () => string): YallaRunResult {
   const candidateResult = requireExactCandidate(rootDir, loadedConfig)
   if (!candidateResult.candidate) return { exitCode: 1, instruction: candidateResult.instruction }
-  const target = String(options.target || '.pipeline/path-ownership.json').replaceAll('\\', '/')
-  if (!target.startsWith('.pipeline/') || target.includes('..') || !target.endsWith('.json')) {
-    return { exitCode: 1, instruction: 'ownership requires a JSON artifact inside `.pipeline/`.' }
+  let artifact: ReturnType<typeof resolveArtifactTarget>
+  try {
+    artifact = resolveArtifactTarget(rootDir, options.target, 'path-ownership.json')
+  } catch (error) {
+    return { exitCode: 1, instruction: error instanceof Error ? error.message : String(error) }
   }
-  const path = resolve(rootDir, target)
+  const { path } = artifact
   const document = readJson(path)
   const rawClaims = Array.isArray(document?.claims) ? document.claims as PathClaim[] : []
   if (!rawClaims.length || rawClaims.some(claim => !claim.owner || !Array.isArray(claim.paths) || !claim.paths.length)) {
@@ -583,7 +705,7 @@ function validateOwnership(rootDir: string, loadedConfig: LoadedYallaConfig, opt
     verdict: overlaps.length || unownedChangedPaths.length || attribution.unattributed.length || attribution.falsely_claimed.length || attribution.multiply_attributed.length ? 'CONFLICT' : 'PASS',
   }
   delete resultContent._meta
-  const result = bindArtifact(resultContent, candidateResult.candidate, 'yalla-run:ownership', ['.pipeline/goal-contract.json'], now)
+  const result = bindArtifact(resultContent, candidateResult.candidate, 'yalla-run:ownership', [pipelineRef(rootDir, 'goal-contract.json')], now)
   atomicWriteJson(path, result)
   return { exitCode: result.verdict === 'CONFLICT' ? 1 : 0, artifactPath: path, status: result }
 }
@@ -609,7 +731,7 @@ function writeEvaluatorResult(rootDir: string, loadedConfig: LoadedYallaConfig, 
     failure_action: failureClass ? routeFailure(failureClass) : undefined,
     next_instruction: options.message || evaluatorNextInstruction(verdict),
   }
-  const result = bindArtifact(resultContent, candidateResult.candidate, 'yalla-run:evaluate', ['.pipeline/goal-contract.json', '.pipeline/baseline.json', '.pipeline/acceptance-trace.json', '.pipeline/test-evidence.json', '.pipeline/review-results.json'], now)
+  const result = bindArtifact(resultContent, candidateResult.candidate, 'yalla-run:evaluate', ['goal-contract.json', 'baseline.json', 'acceptance-trace.json', 'test-evidence.json', 'review-results.json'].map(name => pipelineRef(rootDir, name)), now)
   const document = { schema_version: CONTROL_SCHEMA_VERSION, yalla_version: YALLA_CONTROL_VERSION, version: 2, results: [...results, result] }
   atomicWriteJson(path, document)
   recordEvent(rootDir, { ...options, command: 'event', event: 'evaluator.completed', phase: result.phase, message: `${result.evaluator}: ${result.verdict}` }, now)
@@ -620,9 +742,9 @@ function writeLoopState(rootDir: string, loadedConfig: LoadedYallaConfig, now: (
   const pipelineDir = ensurePipeline(rootDir)
   const path = resolve(pipelineDir, 'loop-state.json')
   const status = buildStatus(rootDir, loadedConfig)
-  const goal = readJson(resolve(rootDir, '.pipeline/goal-contract.json'))
-  const evaluator = readJson(resolve(rootDir, '.pipeline/evaluator-results.json'))
-  const candidate = readCandidate(rootDir)
+  const goal = readJson(pipelineFile(rootDir, 'goal-contract.json'))
+  const evaluator = readJson(pipelineFile(rootDir, 'evaluator-results.json'))
+  const candidate = readCandidate(rootDir, activeRunContext(rootDir).pipelineDir)
   const evaluatorResults = Array.isArray(evaluator?.results) ? evaluator.results as Array<Record<string, unknown>> : []
   const latestEvaluator = candidate
     ? [...evaluatorResults].reverse().find(result => artifactFreshness(result, candidate).status === 'CURRENT')
@@ -639,7 +761,7 @@ function writeLoopState(rootDir: string, loadedConfig: LoadedYallaConfig, now: (
     failure_class: latestEvaluator?.failure_class ?? null,
     next_instruction: loopInstruction(decision, status, latestEvaluator),
   }
-  const loopState = candidate ? bindArtifact(loopStateContent, candidate, 'yalla-run:loop', ['.pipeline/goal-contract.json', '.pipeline/evaluator-results.json', '.pipeline/outcome-evaluation.json'], now) : loopStateContent
+  const loopState = candidate ? bindArtifact(loopStateContent, candidate, 'yalla-run:loop', ['goal-contract.json', 'evaluator-results.json', 'outcome-evaluation.json'].map(name => pipelineRef(rootDir, name)), now) : loopStateContent
   atomicWriteJson(path, loopState)
   recordEvent(rootDir, { command: 'event', event: 'loop.evaluated', phase: String(status.phase ?? ''), message: `${decision}: ${loopState.next_instruction}` }, now)
   return { exitCode: decision === 'continue' ? 0 : decision === 'stop-proven' ? 0 : 1, loopPath: path, status: loopState }
@@ -650,8 +772,8 @@ function writeSessionMiningReport(rootDir: string, loadedConfig: LoadedYallaConf
   const path = resolve(pipelineDir, 'session-mining-report.json')
   recordEvent(rootDir, { command: 'event', event: 'sessions.mined', phase: 'compound', message: 'Session mining started' }, now)
   const events = readEvents(rootDir)
-  const testEvidence = readJson(resolve(rootDir, '.pipeline/test-evidence.json'))
-  const reviewResults = readJson(resolve(rootDir, '.pipeline/review-results.json'))
+  const testEvidence = readJson(pipelineFile(rootDir, 'test-evidence.json'))
+  const reviewResults = readJson(pipelineFile(rootDir, 'review-results.json'))
   const failedCommands = Array.isArray(testEvidence?.commands)
     ? (testEvidence.commands as Array<Record<string, unknown>>).filter(command => command.status && command.status !== 'pass')
     : []
@@ -668,8 +790,8 @@ function writeSessionMiningReport(rootDir: string, loadedConfig: LoadedYallaConf
     blocker_patterns: events.filter(event => event.event.includes('blocked') || String(event.properties.message ?? '').toLowerCase().includes('blocked')),
     suggested_updates: suggestedSessionUpdates(events, failedCommands, failedReviews),
   }
-  const candidate = readCandidate(rootDir)
-  const report = candidate ? bindArtifact(reportContent, candidate, 'yalla-run:mine-sessions', ['.pipeline/events.jsonl', '.pipeline/test-evidence.json', '.pipeline/review-results.json'], now) : reportContent
+  const candidate = readCandidate(rootDir, activeRunContext(rootDir).pipelineDir)
+  const report = candidate ? bindArtifact(reportContent, candidate, 'yalla-run:mine-sessions', ['events.jsonl', 'test-evidence.json', 'review-results.json'].map(name => pipelineRef(rootDir, name)), now) : reportContent
   atomicWriteJson(path, report)
   return { exitCode: 0, miningPath: path, status: report }
 }
@@ -685,8 +807,8 @@ function writeOperation(rootDir: string, loadedConfig: LoadedYallaConfig, option
   const operationStatus = options.operationStatus ?? 'pending'
   if (operationStatus === 'succeeded' || operationStatus === 'failed') {
     try {
-      const completed = completeOperationReceipt({ rootDir, operationId: options.operationId, capability: options.capability, action: options.action, target: options.target, status: operationStatus, now })
-      return { exitCode: 0, operationPath: resolve(rootDir, '.pipeline/operation-receipts.json'), status: completed as unknown as Record<string, unknown> }
+      const completed = completeOperationReceipt({ rootDir, pipelineDir: activeRunContext(rootDir).pipelineDir, operationId: options.operationId, capability: options.capability, action: options.action, target: options.target, status: operationStatus, now })
+      return { exitCode: 0, operationPath: pipelineFile(rootDir, 'operation-receipts.json'), status: completed as unknown as Record<string, unknown> }
     } catch (error) {
       return { exitCode: 1, instruction: error instanceof Error ? error.message : String(error) }
     }
@@ -697,6 +819,7 @@ function writeOperation(rootDir: string, loadedConfig: LoadedYallaConfig, option
   try {
     const receipt = recordOperationReceipt({
       rootDir,
+      pipelineDir: activeRunContext(rootDir).pipelineDir,
       candidate: candidateResult.candidate,
       allowedCapabilities: loadedConfig.config.capabilities.allowed,
       operationId: options.operationId,
@@ -706,7 +829,7 @@ function writeOperation(rootDir: string, loadedConfig: LoadedYallaConfig, option
       operationStatus,
       now,
     })
-    return { exitCode: 0, operationPath: resolve(rootDir, '.pipeline/operation-receipts.json'), status: receipt as unknown as Record<string, unknown> }
+    return { exitCode: 0, operationPath: pipelineFile(rootDir, 'operation-receipts.json'), status: receipt as unknown as Record<string, unknown> }
   } catch (error) {
     return { exitCode: 1, instruction: error instanceof Error ? error.message : String(error) }
   }
@@ -723,8 +846,8 @@ function writeRemoteJob(rootDir: string, loadedConfig: LoadedYallaConfig, option
   if (options.jobStatus !== 'reserve' && options.durationSeconds === undefined) return { exitCode: 1, instruction: 'Completing a remote job requires --duration-seconds.' }
   if (options.jobStatus === 'succeeded' || options.jobStatus === 'failed') {
     try {
-      const completed = completeRemoteJob({ rootDir, operationId: options.operationId, kind: options.jobKind, artifactAction: options.artifactAction, status: options.jobStatus, durationSeconds, cost: options.cost, retryReason: options.retryReason, now })
-      return { exitCode: 0, telemetryPath: resolve(rootDir, '.pipeline/remote-jobs.json'), status: completed as unknown as Record<string, unknown> }
+      const completed = completeRemoteJob({ rootDir, pipelineDir: activeRunContext(rootDir).pipelineDir, operationId: options.operationId, kind: options.jobKind, artifactAction: options.artifactAction, status: options.jobStatus, durationSeconds, cost: options.cost, retryReason: options.retryReason, now })
+      return { exitCode: 0, telemetryPath: pipelineFile(rootDir, 'remote-jobs.json'), status: completed as unknown as Record<string, unknown> }
     } catch (error) {
       return { exitCode: 1, instruction: error instanceof Error ? error.message : String(error) }
     }
@@ -739,6 +862,7 @@ function writeRemoteJob(rootDir: string, loadedConfig: LoadedYallaConfig, option
   if (options.jobStatus === 'reserve') {
     const budget = checkRemoteJobBudget({
       rootDir,
+      pipelineDir: activeRunContext(rootDir).pipelineDir,
       candidate: candidateResult.candidate,
       operationId: options.operationId,
       kind: options.jobKind,
@@ -748,6 +872,7 @@ function writeRemoteJob(rootDir: string, loadedConfig: LoadedYallaConfig, option
     if (!budget.allowed) {
       recordRemoteJob({
         rootDir,
+        pipelineDir: activeRunContext(rootDir).pipelineDir,
         candidate: candidateResult.candidate,
         operationId: options.operationId,
         kind: options.jobKind,
@@ -757,12 +882,13 @@ function writeRemoteJob(rootDir: string, loadedConfig: LoadedYallaConfig, option
         retryReason: budget.reason,
         now,
       })
-      return { exitCode: 1, telemetryPath: resolve(rootDir, '.pipeline/remote-jobs.json'), instruction: `POLICY_BLOCKED: ${budget.reason}` }
+      return { exitCode: 1, telemetryPath: pipelineFile(rootDir, 'remote-jobs.json'), instruction: `POLICY_BLOCKED: ${budget.reason}` }
     }
   }
   try {
     const recorded = recordRemoteJob({
       rootDir,
+      pipelineDir: activeRunContext(rootDir).pipelineDir,
       candidate: candidateResult.candidate,
       operationId: options.operationId,
       kind: options.jobKind,
@@ -773,7 +899,7 @@ function writeRemoteJob(rootDir: string, loadedConfig: LoadedYallaConfig, option
       retryReason: options.retryReason,
       now,
     })
-    return { exitCode: 0, telemetryPath: resolve(rootDir, '.pipeline/remote-jobs.json'), status: recorded as unknown as Record<string, unknown> }
+    return { exitCode: 0, telemetryPath: pipelineFile(rootDir, 'remote-jobs.json'), status: recorded as unknown as Record<string, unknown> }
   } catch (error) {
     return { exitCode: 1, instruction: error instanceof Error ? error.message : String(error) }
   }
@@ -796,9 +922,9 @@ function verifierRegistryCheck(verifiers: Record<string, string>): Check {
 }
 
 function ensurePipeline(rootDir: string) {
-  const pipelineDir = resolve(rootDir, '.pipeline')
-  mkdirSync(pipelineDir, { recursive: true })
-  return pipelineDir
+  const stateDir = activeRunContext(rootDir).pipelineDir
+  mkdirSync(stateDir, { recursive: true })
+  return stateDir
 }
 
 function normalizePhase(value: string | undefined): RunPhase {
@@ -826,7 +952,7 @@ function readVerdict(outcome: Record<string, unknown> | null): Verdict {
 }
 
 function readEvents(rootDir: string): YallaRunEvent[] {
-  const path = resolve(rootDir, '.pipeline/events.jsonl')
+  const path = pipelineFile(rootDir, 'events.jsonl')
   if (!existsSync(path)) return []
   return readFileSync(path, 'utf8')
     .split('\n')
@@ -842,9 +968,9 @@ function readEvents(rootDir: string): YallaRunEvent[] {
 }
 
 function listPipelineArtifacts(rootDir: string) {
-  const pipelineDir = resolve(rootDir, '.pipeline')
-  if (!existsSync(pipelineDir)) return []
-  return listDirectoryFiles(pipelineDir)
+  const stateDir = activeRunContext(rootDir).pipelineDir
+  if (!existsSync(stateDir)) return []
+  return listDirectoryFiles(stateDir)
 }
 
 function listDirectoryFiles(path: string) {
@@ -853,7 +979,7 @@ function listDirectoryFiles(path: string) {
 }
 
 function listCheckpoints(rootDir: string) {
-  const checkpointsDir = resolve(rootDir, '.pipeline/checkpoints')
+  const checkpointsDir = pipelineFile(rootDir, 'checkpoints')
   if (!existsSync(checkpointsDir)) return []
   return readdirSync(checkpointsDir).sort().map(name => resolve(checkpointsDir, name))
 }
@@ -927,30 +1053,30 @@ function validateProofArtifact(target: string, document: Record<string, unknown>
   if (document.issue_id !== undefined && document.issue_id !== candidate.issue_id) {
     return `Cannot bind ${target}; issue_id does not match the active candidate.`
   }
-  if (target === '.pipeline/classification.json') {
+  if (target === 'classification.json') {
     const classificationError = validateClassificationDecisions(document)
     if (classificationError) return classificationError
   }
-  if (target === '.pipeline/acceptance-trace.json') {
+  if (target === 'acceptance-trace.json') {
     const criteria = Array.isArray(document.criteria) ? document.criteria as Array<Record<string, unknown>> : []
     if (!criteria.length) return 'Acceptance trace requires at least one criterion.'
   }
-  if (target === '.pipeline/test-evidence.json') {
+  if (target === 'test-evidence.json') {
     const commands = Array.isArray(document.commands) ? document.commands : []
     if (!commands.length) return 'Test evidence requires at least one command result.'
   }
-  if (target === '.pipeline/review-results.json') {
+  if (target === 'review-results.json') {
     const checks = Array.isArray(document.checks) ? document.checks : []
     if (!checks.length) return 'Review results require at least one binary check.'
   }
-  if (target !== '.pipeline/outcome-evaluation.json') return undefined
+  if (target !== 'outcome-evaluation.json') return undefined
 
   if (document.issue_id !== candidate.issue_id || !candidate.issue_id) return 'PROVEN outcome requires the active candidate issue_id.'
   const verdict = String(document.verdict ?? '')
   if (!['PROVEN', 'NOT_PROVEN', 'INCONCLUSIVE'].includes(verdict)) return 'Outcome verdict must be PROVEN, NOT_PROVEN, or INCONCLUSIVE.'
   if (verdict !== 'PROVEN') return undefined
 
-  const acceptance = readJson(resolve(rootDir, '.pipeline/acceptance-trace.json'))
+  const acceptance = readJson(pipelineFile(rootDir, 'acceptance-trace.json'))
   const criteria = Array.isArray(acceptance?.criteria) ? acceptance.criteria as Array<Record<string, unknown>> : []
   if (!criteria.length || criteria.some(criterion => criterion.status !== 'covered' || !String(criterion.evidence ?? '').trim() || criterion.proof_mode === 'inconclusive')) {
     return 'PROVEN requires every acceptance criterion to be covered by non-inconclusive evidence.'
@@ -963,14 +1089,14 @@ function validateProofArtifact(target: string, document: Record<string, unknown>
     return boundary?.required === true && boundary.status !== 'covered'
   })) return 'PROVEN requires every mandatory boundary proof to be covered.'
 
-  const goal = readJson(resolve(rootDir, '.pipeline/goal-contract.json'))
+  const goal = readJson(pipelineFile(rootDir, 'goal-contract.json'))
   const goalCriteria = Array.isArray(goal?.success_criteria) ? goal.success_criteria.map(value => normalizeProofLabel(value)) : []
   const acceptanceNames = criteria.map(criterion => normalizeProofLabel(criterion.criterion ?? criterion.description))
   if (!goalCriteria.length || JSON.stringify([...new Set(goalCriteria)].sort()) !== JSON.stringify([...new Set(acceptanceNames)].sort())) {
     return 'PROVEN acceptance trace must cover the exact goal-contract success criteria.'
   }
 
-  const testEvidence = readJson(resolve(rootDir, '.pipeline/test-evidence.json'))
+  const testEvidence = readJson(pipelineFile(rootDir, 'test-evidence.json'))
   const commands = Array.isArray(testEvidence?.commands) ? testEvidence.commands as Array<Record<string, unknown>> : []
   if (!commands.length || commands.some(command => command.status !== 'pass')) return 'PROVEN requires every required command to pass.'
   const requiredEvidence = Array.isArray(goal?.required_evidence) ? goal.required_evidence.map(value => normalizeProofLabel(value)) : []
@@ -983,12 +1109,12 @@ function validateProofArtifact(target: string, document: Record<string, unknown>
   const ci = testEvidence?.ci_evidence as Record<string, unknown> | undefined
   if (ci && !['pass', 'n/a'].includes(String(ci.status))) return 'PROVEN requires passing or explicitly non-applicable CI evidence.'
 
-  const review = readJson(resolve(rootDir, '.pipeline/review-results.json'))
+  const review = readJson(pipelineFile(rootDir, 'review-results.json'))
   const checks = Array.isArray(review?.checks) ? review.checks as Array<Record<string, unknown>> : []
   if (!checks.length || checks.some(check => String(check.verdict ?? check.status ?? '').toLowerCase() !== 'pass')) {
     return 'PROVEN requires every required review check to pass.'
   }
-  const classification = readJson(resolve(rootDir, '.pipeline/classification.json'))
+  const classification = readJson(pipelineFile(rootDir, 'classification.json'))
   const classificationError = validateClassificationDecisions(classification ?? {})
   if (classificationError) return `PROVEN requires a valid persisted classification: ${classificationError}`
   const requiredGates = Array.isArray(classification?.required_gates) ? classification.required_gates.map(value => String(value)) : []
@@ -1096,7 +1222,7 @@ function loopInstruction(decision: LoopDecision, status: Record<string, unknown>
   if (decision === 'stop-identity') return `Stop: candidate identity or policy changed (${String(status.candidate_state ?? 'unknown')}). Revalidate and mint a new candidate before reusing proof.`
   if (decision === 'stop-policy') return 'Stop: required capability is not granted. Obtain explicit authority or narrow the action.'
   if (decision === 'stop-superseded') return 'Stop: this candidate or evaluator result is superseded. Discard its proof and use the current candidate.'
-  if (decision === 'blocked') return 'Create `.pipeline/goal-contract.json` before starting the loop.'
+  if (decision === 'blocked') return `Create ${String(status.pipeline_dir ?? '.pipeline')}/goal-contract.json before starting the loop.`
   if (latestEvaluator?.next_instruction) return String(latestEvaluator.next_instruction)
   return `Continue from phase ${String(status.phase ?? 'unknown')} and collect missing verifier evidence.`
 }
@@ -1108,12 +1234,20 @@ function candidateValidationOptions(rootDir: string, loadedConfig: LoadedYallaCo
     baseBranch: loadedConfig?.config.baseBranch ?? candidate.base_branch,
     configPath: loadedConfig?.path,
     releaseAdapterPath: loadedConfig?.config.releaseAdapterPath,
+    pipelineDir: activeRunContext(rootDir).pipelineDir,
   }
 }
 
 function requireExactCandidate(rootDir: string, loadedConfig: LoadedYallaConfig) {
-  const candidate = readCandidate(rootDir)
-  if (!candidate) return { candidate: null, instruction: 'No active candidate. Run `npm run yalla:run -- candidate --issue-id issue-###` first.' }
+  const candidate = readCandidate(rootDir, activeRunContext(rootDir).pipelineDir)
+  if (!candidate) {
+    const context = activeRunContext(rootDir)
+    const goal = readJson(resolve(context.pipelineDir, 'goal-contract.json'))
+    return {
+      candidate: null,
+      instruction: `No active candidate. Run \`npm run yalla:run -- candidate --pipeline-dir ${context.pipelinePath} --issue-id ${String(goal?.issue_id ?? '<issue-id>')} --run-id ${String(goal?.run_id ?? '<run-id>')}\` first.`,
+    }
+  }
   const validation = validateCandidate(candidate, candidateValidationOptions(rootDir, loadedConfig, candidate))
   if (validation.state !== 'RESUMABLE_EXACT') return { candidate: null, instruction: `${validation.state}: ${validation.reasons.join('; ')}` }
   return { candidate, instruction: '' }
@@ -1162,9 +1296,9 @@ function renderReport(rootDir: string, loadedConfig: LoadedYallaConfig, status: 
   const eventRows = events.slice(-50).map(event => `<tr><td>${escapeHtml(event.ts)}</td><td>${escapeHtml(event.event)}</td><td>${escapeHtml(event.phase ?? '')}</td><td>${escapeHtml(String(event.properties.message ?? ''))}</td></tr>`).join('')
   const artifacts = Array.isArray(status.artifacts) ? status.artifacts as string[] : []
   const completed = new Set(Array.isArray(status.completed_phases) ? status.completed_phases as string[] : [])
-  const goal = readJson(resolve(rootDir, '.pipeline/goal-contract.json'))
-  const evaluator = readJson(resolve(rootDir, '.pipeline/evaluator-results.json'))
-  const benchmarks = readJson(resolve(rootDir, '.pipeline/benchmarks.json'))
+  const goal = readJson(pipelineFile(rootDir, 'goal-contract.json'))
+  const evaluator = readJson(pipelineFile(rootDir, 'evaluator-results.json'))
+  const benchmarks = readJson(pipelineFile(rootDir, 'benchmarks.json'))
   const visualEvidence = listVisualEvidence(rootDir)
   return `<!doctype html>
 <html lang="en">
@@ -1196,7 +1330,7 @@ function renderReport(rootDir: string, loadedConfig: LoadedYallaConfig, status: 
 <main>
   <section class="hero">
     <h1>Yalla Run Report</h1>
-    <p>Local evidence dashboard generated from <code>.pipeline/*</code>. It is safe to share in a PR when it contains no secrets.</p>
+    <p>Local evidence dashboard generated from <code>${escapeHtml(activeRunContext(rootDir).pipelinePath)}/*</code>. It is safe to share in a PR when it contains no secrets.</p>
     <p><strong>Root:</strong> ${escapeHtml(rootDir)}</p>
     <p><strong>Config:</strong> ${escapeHtml(loadedConfig.path ?? 'missing')}</p>
   </section>
@@ -1221,12 +1355,12 @@ function renderReport(rootDir: string, loadedConfig: LoadedYallaConfig, status: 
 }
 
 function listVisualEvidence(rootDir: string) {
-  const dir = resolve(rootDir, '.pipeline/visual-evidence')
+  const dir = pipelineFile(rootDir, 'visual-evidence')
   if (!existsSync(dir)) return []
   return readdirSync(dir)
     .filter(name => /\.(png|jpg|jpeg|webp|gif|svg)$/i.test(name))
     .sort()
-    .map(name => ({ name, path: `.pipeline/visual-evidence/${name}` }))
+    .map(name => ({ name, path: `${activeRunContext(rootDir).pipelinePath}/visual-evidence/${name}` }))
 }
 
 function renderVisualEvidence(items: Array<{ name: string; path: string }>) {

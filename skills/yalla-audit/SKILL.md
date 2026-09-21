@@ -30,10 +30,10 @@ Also gather when present:
 
 - Plan file: `plans/active/issue-###-*`
 - Plan JSON: `plans/active/issue-###.plan.json`
-- Pipeline artifacts: `.pipeline/candidate.json`, `.pipeline/baseline.json`, `.pipeline/classification.json`, `.pipeline/diagnosis.json`, `.pipeline/acceptance-trace.json`, `.pipeline/test-evidence.json`, `.pipeline/review-results.json`, `.pipeline/ship-manifest.json`
-- Operator artifacts: `.pipeline/events.jsonl`, `.pipeline/latest-checkpoint.json`, `.pipeline/checkpoints/`, `.pipeline/report.html`
-- Long-running control artifacts: `.pipeline/goal-contract.json`, `.pipeline/evaluator-results.json`, `.pipeline/loop-state.json`, `.pipeline/operation-receipts.json`, `.pipeline/remote-jobs.json`, `.pipeline/session-mining-report.json`, `.pipeline/visual-evidence/`, `.pipeline/benchmarks.json`
-- Export bundle: `.pipeline/export-*` when `npm run yalla:run -- export` was used for a portable audit snapshot
+- Pipeline artifacts from the exact namespace: `<run-state>/candidate.json`, `baseline.json`, `classification.json`, `diagnosis.json`, `acceptance-trace.json`, `test-evidence.json`, `review-results.json`, and `ship-manifest.json`
+- Operator artifacts from the exact namespace: `<run-state>/events.jsonl`, `latest-checkpoint.json`, `checkpoints/`, and `report.html`
+- Long-running control artifacts from the exact issue/run namespace: `<run-state>/goal-contract.json`, `evaluator-results.json`, `loop-state.json`, `operation-receipts.json`, `remote-jobs.json`, `session-mining-report.json`, `visual-evidence/`, and `benchmarks.json`. Confirm `pipeline_dir`, `issue_id`, and `run_id`; never mix root or sibling-run evidence.
+- Export bundle: `<run-state>/export-*` when `npm run yalla:run -- export --pipeline-dir <run-state> --issue-id <issue-id> --run-id <run-id>` was used for a portable audit snapshot
 - Git diff/stat from the PR or branch: `git log "$BASE_BRANCH"..session/issue-###-* --stat` if branch still exists
 - Learnings: `docs/learnings/` entries referencing `issue-###`
 
@@ -102,8 +102,8 @@ Record a finding only when a problem exists.
 - Did non-protected local mutations reserve unique operation IDs before execution and record terminal states? Did every protected action remain outside the local runner and go through an external operator-controlled executor that independently verified candidate, action, target, policy, and human approval?
 - For T1/T2 releases, did the adapter pin immutable project identity and record remote build/reuse/cost/retry budgets per candidate?
 - Was state resumable through `.pipeline-state.json`, issue comments, and PR evidence?
-- Was state resumable through `.pipeline/events.jsonl`, `.pipeline/latest-checkpoint.json`, issue comments, and PR evidence?
-- Were routine `.pipeline/*` artifacts kept local unless review-relevant?
+- Was state resumable through `<run-state>/events.jsonl`, `<run-state>/latest-checkpoint.json`, issue comments, and PR evidence?
+- Were routine `<run-state>/*` artifacts kept local unless review-relevant?
 - Were branch/worktree/PR links clear?
 
 ### Artifact And PR Integrity

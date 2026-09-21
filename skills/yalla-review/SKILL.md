@@ -31,7 +31,7 @@ git diff "$BASE_BRANCH"
 
 Also read `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARTIFACTS.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/EVIDENCE-GATES.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/TEST-SEAMS.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARCHITECTURE-DEPTH.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/PROJECT-CHECKS.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/REVIEW-CHECKS.md`, and `${CLAUDE_PLUGIN_ROOT}/knowledge/product/INTENDED-VS-IMPLEMENTED.md` before launching reviewers.
 
-Read `.pipeline/goal-contract.json`, `.pipeline/classification.json`, `.pipeline-state.json`, and `.pipeline/candidate.json` when present. Run `npm run yalla:run -- status` before trusting checkpoints or evidence. Confirm acceptance exactly covers the goal criteria and required commands. Treat their persisted `required_gates` as a floor: final `review_evidence.required_checks` must retain every armed evidence check, all seven portable evidence gates need applicable/pass or concrete N/A decisions, and an applicable gate cannot be downgraded. Artifact content, binding metadata, and dependency digests must all be current.
+Resolve the exact issue ID, run ID, and canonical namespace from the task or PR before reading evidence. Read `<run-state>/goal-contract.json`, `<run-state>/classification.json`, `.pipeline-state.json`, and `<run-state>/candidate.json` when present. Run `npm run yalla:run -- status --pipeline-dir <run-state> --issue-id <issue-id> --run-id <run-id>` before trusting checkpoints or evidence. Never silently fall back to root `.pipeline/*` or a different run. Confirm acceptance exactly covers the goal criteria and required commands. Treat their persisted `required_gates` as a floor: final `review_evidence.required_checks` must retain every armed evidence check, all seven portable evidence gates need applicable/pass or concrete N/A decisions, and an applicable gate cannot be downgraded. Artifact content, binding metadata, namespace identity, and dependency digests must all be current.
 
 Reject review input unless candidate state is `RESUMABLE_EXACT` and every artifact used for a pass is `CURRENT`. If the diff touches `AGENTS.md`, `CLAUDE.md`, `.claude/YALLA.md`, Yalla skills/agents/hooks, capability policy, or a release adapter, refresh the candidate and re-run review in fresh context. A late asynchronous result for another candidate is `SUPERSEDED`, not a fix request or approval for the new head.
 
@@ -43,7 +43,7 @@ Reject review input unless candidate state is `RESUMABLE_EXACT` and every artifa
 > "Do the repository, worktree, branch, base/head SHAs, goal contract, config, trust policy, checkpoint, and all evidence used here belong to the same exact candidate, with unchanged declared input digests?"
 
 Specifics to check:
-- `npm run yalla:run -- status` reports `RESUMABLE_EXACT`
+- `npm run yalla:run -- status --pipeline-dir <run-state> --issue-id <issue-id> --run-id <run-id>` reports `RESUMABLE_EXACT`
 - Checkpoint, classification, evaluator, test, review, and outcome artifacts used for the verdict report `CURRENT`, with content and binding-metadata digests intact
 - Review started after the most recent source or trust-root change
 - A stale or unbound artifact is excluded from `PROVEN`
@@ -114,18 +114,18 @@ Specifics to check:
 > "Do tests verify behavior through the highest correct public interface, and does every acceptance criterion have evidence or an accepted risk?"
 
 Specifics to check:
-- `.pipeline/acceptance-trace.json` maps every acceptance criterion to `covered`, `accepted-risk`, or `blocked`
-- Covered criteria name a real test file/command in `.pipeline/test-evidence.json`
+- `<run-state>/acceptance-trace.json` maps every acceptance criterion to `covered`, `accepted-risk`, or `blocked`
+- Covered criteria name a real test file/command in `<run-state>/test-evidence.json`
 - Tests cross the same seam callers/users use: browser flow, API endpoint, or public library function
 - Mocks are only at system boundaries (payment provider, email provider, version control APIs, time/randomness, filesystem when justified), not internal modules you control
 - `TEST_SEAM_BLOCKED` entries include behavior, reason, risk, and architecture finding
-- When the plan has an `Architecture Alignment` section, `.pipeline/architecture-alignment.json` links affected architecture-doc claims to tests, unchanged-code evidence, or accepted risk
+- When the plan has an `Architecture Alignment` section, `<run-state>/architecture-alignment.json` links affected architecture-doc claims to tests, unchanged-code evidence, or accepted risk
 
 **evidence-check:**
 > "Do build/typecheck/test/smoke/claim-verification artifacts prove the stated behavior, and are `INCONCLUSIVE` results handled as risks instead of success?"
 
 Specifics to check:
-- `.pipeline/test-evidence.json` records the project's typecheck, build, targeted tests, and full-suite status or accepted blockers
+- `<run-state>/test-evidence.json` records the project's typecheck, build, targeted tests, and full-suite status or accepted blockers
 - User-visible, CLI, API, performance, or memory claims are stated falsifiably before evidence is presented
 - Claim verification verdicts are exactly `VERIFIED`, `NOT VERIFIED`, or `INCONCLUSIVE`
 - `NOT VERIFIED` and `INCONCLUSIVE` entries are treated as blockers or accepted risks, not green evidence
@@ -152,11 +152,11 @@ Specifics to check:
 - New files in wrong directory (check your conventions doc and docs/architecture/ for conventions)
 
 **architecture-docs-check:**
-> "Does the PRD/plan cite the right architecture docs, does the code conform to those docs or update them in the same PR, and does `.pipeline/architecture-alignment.json` prove the verdict?"
+> "Does the PRD/plan cite the right architecture docs, does the code conform to those docs or update them in the same PR, and does `<run-state>/architecture-alignment.json` prove the verdict?"
 
 Specifics to check:
 - Plan includes `Architecture Alignment` with source-of-truth docs, code sources checked, alignment verdict, required doc updates, and test/review proof
-- `.pipeline/architecture-alignment.json` exists when behavior described in `docs/architecture/` changed
+- `<run-state>/architecture-alignment.json` exists when behavior described in `docs/architecture/` changed
 - Every changed route, API endpoint, auth flow, data model, or generated artifact maps to the relevant doc listed in `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/PROJECT-CHECKS.md`
 - If the code changes a documented behavior, the matching architecture doc changes in the same PR or the artifact records an explicit accepted risk
 - If an architecture doc changes, its `Last verified against code` line is updated where present
@@ -224,7 +224,7 @@ Specifics to check:
 
 ### Run for product intent / product promise changes:
 
-Trigger when `.pipeline/classification.json` has `product_intent_gate: "applies"`, when `.pipeline/product-intent.json` exists, or when the diff changes product/GTM/user-flow behavior, pricing/packaging, onboarding promises, access/delivery boundaries, metrics, or copy that makes a user-visible promise.
+Trigger when `<run-state>/classification.json` has `product_intent_gate: "applies"`, when `<run-state>/product-intent.json` exists, or when the diff changes product/GTM/user-flow behavior, pricing/packaging, onboarding promises, access/delivery boundaries, metrics, or copy that makes a user-visible promise.
 
 **intended-vs-implemented-check:**
 > "Does the implementation match the documented Product Intent, plan, architecture docs, and PR promises on the real code paths?"
@@ -376,7 +376,7 @@ Fix: Verify the provider signature against the raw body before parsing.
 2. Re-run ALL checks on the changed files (not just the failing check) — a fix that satisfies one check can introduce bugs visible to another (e.g., extracting a helper to fix complexity creates a dead parameter visible to correctness-check)
 3. If the same check fails twice on the same issue, HALT and surface to user
 
-Before returning success, write `.pipeline/review-results.json` using the schema in `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARTIFACTS.md`.
+Before returning success, write `<run-state>/review-results.json` using the schema in `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARTIFACTS.md`.
 
 ---
 

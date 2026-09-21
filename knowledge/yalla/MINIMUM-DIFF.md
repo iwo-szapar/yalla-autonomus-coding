@@ -20,7 +20,7 @@ If two rungs both work, choose the higher rung. If two implementations on the sa
 
 ## Output
 
-Record the decision in `.pipeline/classification.json` and `.pipeline-state.json`:
+Record the decision in `<run-state>/classification.json` and `.pipeline-state.json`:
 
 ```json
 {

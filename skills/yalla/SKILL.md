@@ -46,16 +46,17 @@ If empty, ask "What are we building?" Do not proceed without a clear description
 - The configured task store is canonical for engineering work.
 - Default canonical ID format is `issue-###`; Linear teams may use tracker IDs like `CAP-###`.
 - Do not invent a parallel ID scheme for new work; reference tasks by the configured tracker ID format.
+- Before writing run evidence, choose one stable issue ID and run ID. Every stateful run-control command must receive the same `--issue-id <issue-id> --run-id <run-id> --pipeline-dir .pipeline/runs/<issue-id>/<run-id>` triple. Arbitrary state roots and root `.pipeline/*` are not writable run namespaces. Never reuse another issue or attempt's namespace.
 - If GitHub CLI is unavailable, halt only when GitHub is needed for the configured task mode or PR creation. For Linear, use Linear as the canonical issue store and GitHub for the branch/PR. For DB mode, use `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/SQL-TEMPLATES.md`; only use it if `.claude/YALLA.md` sets `tracking_mode: db`.
-- Every run must produce `.pipeline/outcome-evaluation.json` before shipping.
-- Every non-tiny run must start from `.pipeline/goal-contract.json` or an equivalent issue body section that names desired end state, success criteria, constraints, budget, forbidden shortcuts, and required evidence. Use `npm run yalla:run -- goal ...` when the cloned Yalla repo is available.
-- Every non-tiny run must append structured lifecycle entries to `.pipeline/events.jsonl` and write checkpoints after classify, plan, each meaningful work slice, test, review, and ship. Use `npm run yalla:run -- event ...` and `npm run yalla:run -- checkpoint ...` when the cloned Yalla repo is available.
-- Before a checkpoint may support resume, test, review, or `PROVEN`, initialize or refresh `.pipeline/candidate.json` with `npm run yalla:run -- candidate --issue-id issue-### --run-id <stable-run-id>`. The declared repository must match the observed origin and the configured base must resolve; never substitute `HEAD`. Any source, contract, configuration, worktree identity, or trust-policy change invalidates earlier candidate-bound proof.
-- Bind manually written JSON evidence with `npm run yalla:run -- stamp --target .pipeline/<artifact>.json`. Binding covers content plus immutable metadata and the complete dependency map. Unbound, edited-after-binding, dependency-edited, or stale artifacts may be inspected but cannot support exact resume or `PROVEN`.
+- Every run must produce `<run-state>/outcome-evaluation.json` before shipping.
+- Every non-tiny run must start from `<run-state>/goal-contract.json` or an equivalent issue body section that names desired end state, success criteria, constraints, budget, forbidden shortcuts, and required evidence. When the cloned Yalla repo is available, use `npm run yalla:run -- goal --pipeline-dir <run-state> --issue-id issue-### --run-id <stable-run-id> ...`; the runner must fail before writing if the namespace is foreign or legacy state.
+- Every non-tiny run must append structured lifecycle entries to `<run-state>/events.jsonl` and write checkpoints after classify, plan, each meaningful work slice, test, review, and ship. Pass the same exact issue ID, run ID, and canonical pipeline directory to every event and checkpoint command.
+- Before a checkpoint may support resume, test, review, or `PROVEN`, initialize or refresh `<run-state>/candidate.json` with `npm run yalla:run -- candidate --pipeline-dir <run-state> --issue-id issue-### --run-id <stable-run-id>`. Candidate identity binds the namespace as well as repository, worktree, branch, base, head, contract, configuration, and trust policy. Never substitute `HEAD`; any bound input change invalidates earlier proof.
+- Bind manually written JSON evidence with `npm run yalla:run -- stamp --pipeline-dir <run-state> --issue-id <issue-id> --run-id <run-id> --target <run-state>/<artifact>.json`. Binding covers content plus immutable metadata and the complete dependency map. Unbound, edited-after-binding, dependency-edited, cross-namespace, or stale artifacts may be inspected but cannot support exact resume or `PROVEN`.
 - Classify every evaluator failure as `CANDIDATE_FAILURE`, `BASELINE_FAILURE`, `INFRA_ERROR`, `IDENTITY_MISMATCH`, `POLICY_BLOCKED`, or `SUPERSEDED`. Only `CANDIDATE_FAILURE` returns to implementation.
 - Capabilities fail closed. The configured allowlist may grant branch commit/push/PR creation. The local runner never authorizes protected operations or executes repository-supplied release preflights. Merge, production deployment/promotion, provider configuration, secrets, migrations, pricing, and external sends remain unavailable locally and belong to an external operator-controlled executor that independently verifies identity, policy, and approval.
-- Executor and evaluator roles are separate. The evaluator reads goal/evidence/diff and writes `.pipeline/evaluator-results.json`; it does not implement its own fixes.
-- Before shipping, generate or refresh `.pipeline/report.html` with `npm run yalla:run -- report` when the run produced meaningful evidence artifacts.
+- Executor and evaluator roles are separate. The evaluator reads goal/evidence/diff and writes `<run-state>/evaluator-results.json`; it does not implement its own fixes.
+- Before shipping, generate or refresh `<run-state>/report.html` with `npm run yalla:run -- report --pipeline-dir <run-state> --issue-id <issue-id> --run-id <run-id>` when the run produced meaningful evidence artifacts.
 - Only verdict `PROVEN` may be described as done, complete, ready to merge, or safe for autopilot progression.
 - Verdicts `NOT_PROVEN` and `INCONCLUSIVE` are honest outcomes, not success states.
 
@@ -131,7 +132,7 @@ Proof rules:
 - A skipped real-environment check is either an intentional guard skip (and omitted from the promise) or an unresolved proof gap; the latter cannot support `PROVEN`.
 - When the same prose review rule catches a real defect twice, propose the smallest deterministic guard and replace or narrow the repeated prose rule once the guard prevents it.
 - If review causes code changes, rerun the relevant checks and record the rerun evidence.
-- Do not say `done`, `complete`, `ready to merge`, or equivalent unless `.pipeline/outcome-evaluation.json` has verdict `PROVEN`.
+- Do not say `done`, `complete`, `ready to merge`, or equivalent unless the selected `<run-state>/outcome-evaluation.json` has verdict `PROVEN`.
 
 ---
 
@@ -197,13 +198,13 @@ Classify the task before planning:
    - `applies` when preview, staging, production, remote, or other real-environment evidence will be needed or claimed. Add `runtime-e2e-proof-check` to `required_gates`.
    - `n/a` only with a concrete reason naming why local/static proof is sufficient.
 14. Determine `evidence_gate_requirements` for `surface_parity`, `trust_map`, `volume_envelope`, `lifecycle_states`, and `ui_proof`. Record every gate as `applies` or `n/a` with a concrete reason. For each applicable gate, add its matching `surface-parity-check`, `trust-map-check`, `volume-envelope-check`, `lifecycle-state-check`, or `ui-proof-check` to `required_gates`.
-15. Write `.pipeline/classification.json` and add the same fields, gate decisions, and reasons to `.pipeline-state.json`.
-16. Write or update `.pipeline/goal-contract.json` with success criteria, constraints, budget, forbidden shortcuts, and required evidence.
+15. Write `<run-state>/classification.json` and add the same fields, gate decisions, and reasons to `.pipeline-state.json`.
+16. Write or update `<run-state>/goal-contract.json` with success criteria, constraints, budget, forbidden shortcuts, and required evidence, preserving the selected issue ID, run ID, and pipeline namespace.
 17. Record the classification event. If the final branch/worktree already exists, initialize the candidate and checkpoint `classify`; otherwise defer the resumable checkpoint until Phase 0 creates and enters that worktree.
 
 ### Conditional routing
 
-- `tiny-hotfix` -> for one-file or one-value fixes with a clear failing test, use minimal evidence mode: reproduce the failure, make the smallest fix, rerun the exact failing test, run `git diff --check`, perform a hostile self-review inline or in PR notes, and skip committed `.pipeline/*` artifacts unless the decision is non-obvious.
+- `tiny-hotfix` -> for one-file or one-value fixes with a clear failing test, use minimal evidence mode: reproduce the failure, make the smallest fix, rerun the exact failing test, run `git diff --check`, perform a hostile self-review inline or in PR notes, and skip committed `<run-state>/*` artifacts unless the decision is non-obvious.
 - `bug` / `perf` / `hotfix` -> run the diagnosis gate before full planning.
 - `ui-prototype` -> create a throwaway UI prototype first, then plan production work after the user selects a direction.
 - `logic-prototype` -> create a throwaway terminal/state prototype first, then plan production work after the model is validated.
@@ -336,7 +337,7 @@ Required before proceeding:
 
 - The user-reported symptom is reproduced, or the blocker is documented.
 - 3-5 falsifiable hypotheses are recorded.
-- `.pipeline/diagnosis.json` exists.
+- `<run-state>/diagnosis.json` exists.
 - A regression test seam is identified, or `TEST_SEAM_BLOCKED` is documented.
 
 ### Planning path
@@ -558,33 +559,33 @@ Acceptance criteria:
 - **Teach-back needed:** yes/no/pending and why
 
 ## Artifact Manifest
-- `.pipeline/architecture-alignment.json`
-- `.pipeline/product-intent.json`
-- `.pipeline/external-grounding.json` [when applicable]
-- `.pipeline/runtime-e2e-preflight.json` [when applicable]
-- `.pipeline/acceptance-trace.json`
-- `.pipeline/progress.md`
-- `.pipeline/intent-brief.md`
-- `.pipeline/test-evidence.json`
-- `.pipeline/review-results.json`
-- `.pipeline/outcome-evaluation.json`
+- `<run-state>/architecture-alignment.json`
+- `<run-state>/product-intent.json`
+- `<run-state>/external-grounding.json` [when applicable]
+- `<run-state>/runtime-e2e-preflight.json` [when applicable]
+- `<run-state>/acceptance-trace.json`
+- `<run-state>/progress.md`
+- `<run-state>/intent-brief.md`
+- `<run-state>/test-evidence.json`
+- `<run-state>/review-results.json`
+- `<run-state>/outcome-evaluation.json`
 ```
 
 Artifact policy:
 
-- Commit `.pipeline/*` artifacts only when they explain non-obvious decisions, accepted risks, review findings, or architecture alignment that reviewers need in the diff.
+- Commit `<run-state>/*` artifacts only when they explain non-obvious decisions, accepted risks, review findings, or architecture alignment that reviewers need in the diff.
 - Keep routine state artifacts local and summarize them in the PR body instead.
-- Never commit `.pipeline/ship-manifest.json` solely to record the PR number or final PR check status; that evidence belongs in the PR body or comments because another commit restarts checks and makes it stale.
-- For tiny-hotfix mode, prefer no committed `.pipeline/*` artifacts unless the fix needs an audit trail beyond the issue, PR body, and test output.
+- Never commit `<run-state>/ship-manifest.json` solely to record the PR number or final PR check status; that evidence belongs in the PR body or comments because another commit restarts checks and makes it stale.
+- For tiny-hotfix mode, prefer no committed `<run-state>/*` artifacts unless the fix needs an audit trail beyond the issue, PR body, and test output.
 
 After user approval:
 
 1. Update the GitHub issue body/comment with the Agent Brief from `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/AGENT-BRIEF.md`.
 2. Persist the approved plan path in `.pipeline-state.json`.
 3. Create required evidence-gate artifacts from `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/EVIDENCE-GATES.md` before the affected slice begins.
-3. If Product Intent applies and the intent is non-obvious or review-relevant, initialize `.pipeline/product-intent.json` with the Product Intent fields and intended behavior claims.
-4. Initialize `.pipeline/acceptance-trace.json` with every acceptance criterion in `status: "pending"`, its proof mode, deterministic-seam decision, and evidence target.
-5. Initialize `.pipeline/progress.md` with planned slices, accepted risks, and the next handoff note when the work is more than a tiny hotfix.
+3. If Product Intent applies and the intent is non-obvious or review-relevant, initialize `<run-state>/product-intent.json` with the Product Intent fields and intended behavior claims.
+4. Initialize `<run-state>/acceptance-trace.json` with every acceptance criterion in `status: "pending"`, its proof mode, deterministic-seam decision, and evidence target.
+5. Initialize `<run-state>/progress.md` with planned slices, accepted risks, and the next handoff note when the work is more than a tiny hotfix.
 
 ---
 
@@ -594,16 +595,16 @@ After user approval:
 2. Read affected files before editing.
 3. Before each phase or slice, do a scoped deep-research pass just for that unit of work:
    - Re-read the affected files and nearest tests.
-   - When APIs, SDKs, providers, browser/platform behavior, protocols, or generated setup are touched, update `.pipeline/external-grounding.json` with current claim-specific sources and their implementation effects.
+   - When APIs, SDKs, providers, browser/platform behavior, protocols, or generated setup are touched, update `<run-state>/external-grounding.json` with current claim-specific sources and their implementation effects.
    - Confirm the test seam is still the highest correct seam.
    - For UI slices, inspect relevant existing screens/components before coding.
-   - Append decisions, failed attempts, and gotchas to `.pipeline/progress.md`.
+   - Append decisions, failed attempts, and gotchas to `<run-state>/progress.md`.
 4. Execute tracer-bullet loop from `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/VERTICAL-SLICES.md`:
    - For each slice and acceptance criterion, write or request one failing behavior test at the highest correct seam before production implementation.
    - Implement the minimum code to pass that test.
    - Run the targeted test and affected suite before moving to the next criterion.
-   - Update `.pipeline/acceptance-trace.json` after each criterion.
-   - Update `.pipeline/progress.md` with completed behavior, decisions made, failed attempts, and next-slice handoff.
+   - Update `<run-state>/acceptance-trace.json` after each criterion.
+   - Update `<run-state>/progress.md` with completed behavior, decisions made, failed attempts, and next-slice handoff.
 5. If no correct seam exists, record `TEST_SEAM_BLOCKED` from `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/TEST-SEAMS.md` and halt for user decision unless the plan already accepted the risk.
 6. Implement the smallest correct change. Do not implement future slices speculatively.
 7. Choose the verification harness when the changed surface needs it:
@@ -611,7 +612,7 @@ After user approval:
    - CLI/TUI/script behavior -> use a deterministic local harness or transcript; clean up temporary sessions and artifacts.
    - Measurable claims -> restate the claim in falsifiable form and capture baseline/treatment evidence when feasible.
    - Core user workflows -> run or define the closest end-to-end path the user would manually check. If automation is missing, either add a focused test or record the manual-validation gap as risk.
-   - Real-environment claims -> complete `.pipeline/runtime-e2e-preflight.json` before the run; record the deployed target revision and base revision, safe data shape, mutation guardrails, inherited failures, and exactly what the run proves and does not prove. Only `status: pass` can support `PROVEN`.
+   - Real-environment claims -> complete `<run-state>/runtime-e2e-preflight.json` before the run; record the deployed target revision and base revision, safe data shape, mutation guardrails, inherited failures, and exactly what the run proves and does not prove. Only `status: pass` can support `PROVEN`.
 8. Run targeted tests after each meaningful chunk.
    - After source changes settle for the chunk, refresh the candidate before recording its checkpoint or accepting evaluator evidence. Results arriving for the older candidate are `SUPERSEDED`.
 9. Run the project's `typecheck` and `build` commands (from `.claude/YALLA.md` `commands:`) where relevant.
@@ -631,7 +632,7 @@ Security self-check: input validation, SQL safety, auth boundaries, CSP/sanitiza
 
 1. Identify what changed — new pages, API endpoints, jobs, webhooks, migrations, generated artifacts, user flows.
 2. Read the plan's `Architecture Alignment` section and relevant `docs/architecture/` files before writing or accepting tests.
-3. Verify every acceptance criterion maps to behavior test evidence in `.pipeline/acceptance-trace.json`.
+3. Verify every acceptance criterion maps to behavior test evidence in `<run-state>/acceptance-trace.json`.
 4. Verify every criterion has a proof mode and that `model-judge` is not used when a deterministic seam exists.
 5. Verify every affected architecture-doc claim is covered by behavior evidence, marked unchanged with code evidence, updated in docs, or explicitly accepted as risk.
 6. Write tests matching existing patterns in the project's test directory (`.claude/YALLA.md` `test_dir`).
@@ -640,11 +641,11 @@ Security self-check: input validation, SQL safety, auth boundaries, CSP/sanitiza
 9. For customer-critical journeys, include at least one negative-path test for the most likely failure mode, not only happy path.
 10. If a prior incident was cited in the plan, add or identify a regression guard for that exact failure mode.
 11. Run the project's test command (`.claude/YALLA.md` `commands.test`) — ALL tests must pass. Fix and retest until green.
-    - If the base was already red, capture `.pipeline/baseline.json` and classify inherited failures as `BASELINE_FAILURE`; do not fold unrelated repairs into this candidate.
+    - If the base was already red, capture `<run-state>/baseline.json` and classify inherited failures as `BASELINE_FAILURE`; do not fold unrelated repairs into this candidate.
     - Classify CI/provider/harness failure as `INFRA_ERROR` and retry the same immutable candidate only within its budget.
-12. For user-visible, integration, CLI, performance, or memory claims, write a falsifiable verification entry in `.pipeline/test-evidence.json` with `VERIFIED`, `NOT VERIFIED`, or `INCONCLUSIVE` and the raw command/artifact evidence.
-13. Write `.pipeline/architecture-alignment.json` when the architecture-doc gate applies.
-14. Write `.pipeline/test-evidence.json` with commands, status, seam blockers, claim verification, smoke evidence, and architecture-doc alignment status when the evidence is non-obvious or needs to be committed. Otherwise summarize the same evidence in the PR body.
+12. For user-visible, integration, CLI, performance, or memory claims, write a falsifiable verification entry in `<run-state>/test-evidence.json` with `VERIFIED`, `NOT VERIFIED`, or `INCONCLUSIVE` and the raw command/artifact evidence.
+13. Write `<run-state>/architecture-alignment.json` when the architecture-doc gate applies.
+14. Write `<run-state>/test-evidence.json` with commands, status, seam blockers, claim verification, smoke evidence, and architecture-doc alignment status when the evidence is non-obvious or needs to be committed. Otherwise summarize the same evidence in the PR body.
 15. If evidence is missing, blocked, or inconclusive, set the eventual outcome to `NOT_PROVEN` or `INCONCLUSIVE`; do not call the work complete.
 16. Update `.pipeline-state.json` to `phase: "4-review"`, `test_status: "passing"` only when required test commands passed. Otherwise record the blocker.
 17. Re-read the persisted classification `required_gates`. Final review must retain every armed evidence check and keep its corresponding evidence gate applicable; planning/review may add gates but must not silently downgrade one to N/A. Record all seven portable gate decisions in review evidence. Validate each applicable gate's required enumeration and link it from the acceptance trace or PR body. Treat an unresolved external-grounding or runtime-E2E gap as `NOT_PROVEN`/`INCONCLUSIVE`, never as green evidence.
@@ -661,7 +662,7 @@ Launch QA sub-agent: navigate affected pages, click buttons, submit forms, check
 
 ## Phase 4: Review
 
-Before fresh-context review, write `.pipeline/intent-brief.md` when the diff is more than a tiny hotfix. The brief is what a senior reviewer needs before looking at the diff:
+Before fresh-context review, write `<run-state>/intent-brief.md` when the diff is more than a tiny hotfix. The brief is what a senior reviewer needs before looking at the diff:
 
 - Original user goal and non-goals.
 - Planned behavior and success invariant.
@@ -672,7 +673,7 @@ Before fresh-context review, write `.pipeline/intent-brief.md` when the diff is 
 - Product Intent summary and intended behavior claims when the product-intent gate applies.
 - Applicable Evidence Gate verdicts, proof boundaries, and any real-environment limits.
 
-Before binary review, run a hostile self-critique and write `.pipeline/but-for-real.md`:
+Before binary review, run a hostile self-critique and write `<run-state>/but-for-real.md`:
 
 - Assume the implementation is wrong in production.
 - Identify 3-5 concrete failure modes the builder likely missed.
@@ -685,7 +686,7 @@ repair or approve a newer head. If the diff touches a trust root (`AGENTS.md`,
 `CLAUDE.md`, `.claude/YALLA.md`, Yalla skills/agents/hooks, capability policy,
 or a release adapter), require a fresh policy digest and fresh-context review.
 
-Use reviewer separation wherever tooling allows it: the reviewer must not be the same agent/model context that wrote the implementation. Prefer a stricter or different model for correctness/security review after a broad implementation pass. If separation is unavailable, record that limitation in `.pipeline/review-results.json` and compensate with narrower evidence checks.
+Use reviewer separation wherever tooling allows it: the reviewer must not be the same agent/model context that wrote the implementation. Prefer a stricter or different model for correctness/security review after a broad implementation pass. If separation is unavailable, record that limitation in `<run-state>/review-results.json` and compensate with narrower evidence checks.
 
 Risk-tier the review:
 
@@ -711,7 +712,7 @@ For structural changes:
 - **complexity-check:** Does this add avoidable abstraction, oversized functions, or YAGNI complexity?
 - **slop-check:** Are comments, casts, defensive checks, or style drift abnormal for the surrounding code?
 - **architecture-depth-check:** Does this change improve or preserve module depth and locality? Are new seams justified by real adapters?
-- **architecture-docs-check:** Does the PRD/plan cite the right architecture docs, does the code conform to those docs or update them in the same PR, and does `.pipeline/architecture-alignment.json` prove the verdict?
+- **architecture-docs-check:** Does the PRD/plan cite the right architecture docs, does the code conform to those docs or update them in the same PR, and does `<run-state>/architecture-alignment.json` prove the verdict?
 - **strict-structure-check (conditional):** For broad/high-risk diffs, is there a clear code-judo simplification that would delete complexity, avoid file-size blowups, or prevent spaghetti branching before shipping?
 
 Evidence-triggered checks:
@@ -734,19 +735,19 @@ Risk-triggered checks:
 - **email-delivery-check:** If an email carries the user's only token/link/instruction, is it treated as critical infrastructure with render tests, logging, retry, and recovery?
 - **generated-artifact-check:** Do generated repos/templates contain no unresolved placeholders, missing manifest files, citation/markup tags, object-string leaks, or inaccessible delivery links?
 - **ui-journey-check:** Can a user complete and recover from the changed form/journey on desktop and mobile, including the likely failure path?
-- **architecture-docs-check:** Do `docs/architecture/*` files and code agree after this PR? If not, did the PR intentionally update one side and record proof in `.pipeline/architecture-alignment.json`?
+- **architecture-docs-check:** Do `docs/architecture/*` files and code agree after this PR? If not, did the PR intentionally update one side and record proof in `<run-state>/architecture-alignment.json`?
 - **doc-alignment-check:** Do docs reflect changed public APIs, routes, migrations, user flows, or operational runbooks?
 - **operator-understanding-check:** Run for non-trivial work. Does the PR include the operator-readable summary/artifact required by its selected understanding depth, without requiring the operator/maintainer to read code?
 
 Any fail blocks shipping. Each Fail must include file/line, exact code, issue, and specific fix.
 
-After fixes, re-run ALL checks on changed files, not just the failing check. Write `.pipeline/review-results.json` before leaving review.
+After fixes, re-run ALL checks on changed files, not just the failing check. Write `<run-state>/review-results.json` before leaving review.
 
 Run a documentation impact scan before shipping. Search only the relevant docs/examples/templates for changed public terms, routes, APIs, env vars, commands, UI labels, generated artifacts, and operational steps. Update impacted docs or record `docs-impact: none` with evidence in the PR body.
 
 ### Outcome Evaluation
 
-After review, write `.pipeline/outcome-evaluation.json`:
+After review, write `<run-state>/outcome-evaluation.json`:
 
 ```json
 {
@@ -797,7 +798,7 @@ Route durable learnings to the smallest lasting home:
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/product/*` for reusable product-intent, assumption-testing, GTM, metrics, or intended-vs-implemented guidance.
 - A source check, lint rule, contract test, or fixture when the same prose review rule catches a real defect twice; remove or narrow the now-redundant prose rule only after the deterministic check passes.
 - `docs/learnings/YYYY-MM-DD-[topic].md` for incident/process-specific directives.
-- `.pipeline/progress.md` only for ephemeral handoff context that should not persist after the PR.
+- `<run-state>/progress.md` only for ephemeral handoff context that should not persist after the PR.
 
 If there are learnings, write them to the selected destination with actionable directives and reference `issue-###`. If not, record a short skip reason in the compound artifact/state. Ask whether the run exposed a durable rule that would prevent the same mistake in future work. Do not update durable docs for one-off preferences or local context rot.
 
@@ -827,7 +828,7 @@ Before committing or opening/updating the PR:
 7. If Product Intent applies, include the outcome, metric/proxy, MVP scope, intended-vs-implemented verdict, and any accepted product assumption risk.
 8. If updating an existing PR, fetch review and discussion comments, group blocking feedback first, and address or explicitly respond to each blocker.
 9. Do not rewrite history, force-push, or clean commits unless the user explicitly approves that separate action.
-10. Read `.pipeline/outcome-evaluation.json`. If verdict is not `PROVEN`, PR copy must say `human review needed` or `not proven`; do not use completion language.
+10. Read `<run-state>/outcome-evaluation.json`. If verdict is not `PROVEN`, PR copy must say `human review needed` or `not proven`; do not use completion language.
 11. For T1/T2 release work, validate the repository-owned release adapter. Reserve each candidate-bound remote job against its budget before launch, then record success/failure, duration, cost, reuse, and retry reason. Do not move provider commands into Yalla core. Missing adapters and budget stops are `POLICY_BLOCKED`, not permission to run first or silently raise the limit.
 12. Record every non-protected local operation before executing it and record a terminal state afterward. Never authorize or execute a protected action locally; hand it to an external operator-controlled executor that independently verifies the exact candidate, scope, policy, and human approval.
 
@@ -933,9 +934,9 @@ After creating or updating the PR, run `gh pr checks --json name,bucket,state,wo
 - If a failure is flaky, retry once and record flake evidence.
 - If a failure is unrelated to this PR, document the evidence instead of bloating the PR with unrelated fixes.
 
-Write `.pipeline/ship-manifest.json` only if it will be committed as meaningful review evidence before PR creation, or keep it local. Do not push a follow-up commit just to add PR number or check status; put that in the PR body/comment instead.
+Write `<run-state>/ship-manifest.json` only if it will be committed as meaningful review evidence before PR creation, or keep it local. Do not push a follow-up commit just to add PR number or check status; put that in the PR body/comment instead.
 
-If `.pipeline/outcome-evaluation.json` is missing, halt before PR creation. If its verdict is not `PROVEN`, PR creation is allowed only when the PR body clearly labels the run as not proven and names the remaining delta.
+If `<run-state>/outcome-evaluation.json` is missing, halt before PR creation. If its verdict is not `PROVEN`, PR creation is allowed only when the PR body clearly labels the run as not proven and names the remaining delta.
 
 Merge only if `.pipeline-state.json` has `merge_policy: "auto-merge-approved"` from an explicit user request in this run. Otherwise stop after PR creation and report the PR URL.
 
@@ -946,10 +947,10 @@ Merge only if `.pipeline-state.json` has `merge_policy: "auto-merge-approved"` f
 1. Read local state for `issue_number`, branch, phase, classification, and merge policy.
 2. Read `plans/active/issue-###-[slug].md`.
 3. Read the GitHub issue body/comments for durable context.
-4. Read `.pipeline/acceptance-trace.json`, `.pipeline/architecture-alignment.json`, `.pipeline/test-evidence.json`, and `.pipeline/review-results.json` if present.
-5. Read `.pipeline/outcome-evaluation.json` if present.
+4. Read `<run-state>/acceptance-trace.json`, `architecture-alignment.json`, `test-evidence.json`, and `review-results.json` if present.
+5. Read `<run-state>/outcome-evaluation.json` if present.
 6. Resume from the recorded phase.
-7. Run `npm run yalla:run -- resume`. Continue automatically only on `RESUMABLE_EXACT`; revalidate or stop on `RESUMABLE_AFTER_REVALIDATION`, `SUPERSEDED`, `IDENTITY_MISMATCH`, or `INCOMPATIBLE_SCHEMA`.
+7. Run `npm run yalla:run -- resume --pipeline-dir <run-state> --issue-id <issue-id> --run-id <run-id>`. Continue automatically only on `RESUMABLE_EXACT`; revalidate or stop on `RESUMABLE_AFTER_REVALIDATION`, `SUPERSEDED`, `IDENTITY_MISMATCH`, or `INCOMPATIBLE_SCHEMA`.
 
 ---
 

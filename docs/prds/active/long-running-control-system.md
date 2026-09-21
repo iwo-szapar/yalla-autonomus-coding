@@ -32,30 +32,31 @@ Yalla already has proof artifacts, checkpoints, reports, model-routing hints, an
 - As an engineer, I can write a goal contract before the run so success criteria and constraints are inspectable.
 - As an operator, I can run a loop check and see whether Yalla should continue, stop proven, stop inconclusive, or stop on budget.
 - As a reviewer, I can inspect evaluator verdicts separately from implementation prose.
-- As a maintainer, I can mine `.pipeline/events.jsonl` and artifacts for recurring failure patterns.
+- As a maintainer, I can mine one exact run namespace's `events.jsonl` and artifacts for recurring failure patterns without mixing sibling runs.
 - As a human supervisor, I can open `report.html` and see screenshots, benchmark data, and budget state without reading raw logs.
 
 ## Requirements
 
-1. `npm run yalla:run -- goal ...` writes `.pipeline/goal-contract.json` with desired end state, success criteria, constraints, budget, forbidden shortcuts, and required evidence.
-2. `npm run yalla:run -- loop` reads goal/status/evaluator state and writes `.pipeline/loop-state.json` with the next non-destructive instruction.
+1. `npm run yalla:run -- goal --pipeline-dir .pipeline/runs/<issue>/<run> --issue-id <issue> --run-id <run> ...` writes a namespaced `goal-contract.json` with desired end state, success criteria, constraints, budget, forbidden shortcuts, and required evidence.
+2. Every stateful command requires the same exact issue ID, run ID, and canonical `.pipeline/runs/<issue>/<run>` namespace. Identity validation and mutation happen inside the namespace-local lock; root `.pipeline/*` artifacts remain manual, read-only legacy evidence.
 3. `knowledge/yalla/VERIFIERS.md` documents verifier selection and config keys.
 4. `YALLA.example.md` supports `verifiers:` and budget fields under `autopilot:`.
-5. `npm run yalla:run -- evaluate ...` writes `.pipeline/evaluator-results.json` with evaluator role, verdict, findings, and next instruction.
-6. `npm run yalla:run -- mine-sessions` writes `.pipeline/session-mining-report.json` with repeated events, failed commands, blocker patterns, and suggested durable rule updates.
-7. `report.html` renders visual evidence files from `.pipeline/visual-evidence/`, benchmark JSON from `.pipeline/benchmarks.json`, evaluator results, goal contract, and budget telemetry.
-8. `npm run yalla:run -- candidate` writes `.pipeline/candidate.json` with repository/worktree/branch/base/head identity plus contract, configuration, and trust-policy digests.
+5. `npm run yalla:run -- evaluate --pipeline-dir .pipeline/runs/<issue>/<run> --issue-id <issue> --run-id <run> ...` writes the namespace's `evaluator-results.json` with evaluator role, verdict, findings, and next instruction.
+6. `npm run yalla:run -- mine-sessions --pipeline-dir .pipeline/runs/<issue>/<run> --issue-id <issue> --run-id <run>` writes the namespace's `session-mining-report.json` with repeated events, failed commands, blocker patterns, and suggested durable rule updates.
+7. `report.html` renders visual evidence, benchmark JSON, evaluator results, goal contract, and budget telemetry only from the selected namespace.
+8. `npm run yalla:run -- candidate --pipeline-dir .pipeline/runs/<issue>/<run> --issue-id <issue> --run-id <run>` writes the namespace's `candidate.json` with repository/worktree/branch/base/head identity, pipeline namespace, and contract/configuration/trust-policy digests.
 9. `resume`, `status`, checkpoints, evaluator results, outcome artifacts, and loop decisions reject or explicitly downgrade stale/unbound evidence.
 10. Evaluator failures declare `CANDIDATE_FAILURE`, `BASELINE_FAILURE`, `INFRA_ERROR`, `IDENTITY_MISMATCH`, `POLICY_BLOCKED`, or `SUPERSEDED`; the loop chooses a distinct deterministic action for each.
-11. Replaceable `.pipeline` state uses atomic writes and an exclusive local run lock. External operations reserve idempotent operation IDs before execution and persist terminal states; remote jobs reserve adapter budget before launch and retain blocked/failed attempts.
+11. Replaceable pipeline state uses atomic writes and an exclusive namespace-local run lock. External operations reserve namespace-bound idempotent operation IDs before execution and persist terminal states; remote jobs reserve namespace-bound adapter budget before launch and retain blocked/failed attempts.
 12. `.claude/YALLA.md` may grant typed capabilities and point to a provider-neutral T1/T2 release adapter. Omitted protected capabilities remain unavailable.
 13. Parallel team runs may declare repo-relative path areas; overlap blocks execution, while ordinary single-agent runs do not inherit path-lock ceremony.
 
 ## Acceptance Criteria
 
 - Typecheck and tests pass.
-- Existing `yalla:run` commands remain backwards-compatible.
-- New commands are local and non-mutating outside `.pipeline/*`.
+- Existing legacy root artifacts remain manually inspectable but cannot be selected or overwritten by the runner; migration must create a fresh bound namespace and new writes require stable issue/run identity.
+- New commands are local and non-mutating outside the explicitly selected repository-contained pipeline namespace.
+- Two interleaved issue/run namespaces cannot mix events, budgets, candidates, locks, receipts, or proof artifacts.
 - Missing optional artifacts produce warnings/empty sections, not crashes.
 - New-user `YALLA.example.md` passes onboarding validation.
 - Session mining and loop decisions are deterministic from local artifacts.

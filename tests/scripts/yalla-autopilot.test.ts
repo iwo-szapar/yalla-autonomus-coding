@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 import { isMutatingCommand, runYallaAutopilot, runYallaAutopilotQueue, type CommandRunner } from '../../scripts/yalla-autopilot.js'
 import { acquireRunLock, releaseRunLock } from '../../scripts/yalla-control.js'
 
+const queuePipelineDir = '.pipeline/runs/queue/autopilot'
+
 function tempRoot() {
   return mkdtempSync(join(tmpdir(), 'yalla-autopilot-'))
 }
@@ -58,7 +60,7 @@ describe('scripts/yalla-autopilot.ts', () => {
 
   it('does not write a queue report when another writer holds the run lock', async () => {
     const root = tempRoot()
-    const lock = acquireRunLock(root, 'other-writer')
+    const lock = acquireRunLock(root, 'other-writer', undefined, queuePipelineDir)
     try {
       await expect(runYallaAutopilotQueue({
         mode: 'dry-run',
@@ -68,7 +70,7 @@ describe('scripts/yalla-autopilot.ts', () => {
           ? { stdout: 'ok', stderr: '', exitCode: 0 }
           : { stdout: '[]', stderr: '', exitCode: 0 },
       })).rejects.toThrow('already held by other-writer')
-      expect(existsSync(join(root, '.pipeline/autopilot-queue-report.json'))).toBe(false)
+      expect(existsSync(join(root, queuePipelineDir, 'autopilot-queue-report.json'))).toBe(false)
     } finally {
       releaseRunLock(lock)
     }
@@ -293,8 +295,8 @@ autopilot:
       },
     })
 
-    expect(result.reportPath).toBe(join(root, '.pipeline/autopilot-queue-report.json'))
-    expect(result.statePath).toBe(join(root, '.pipeline/autopilot-state.json'))
+    expect(result.reportPath).toBe(join(root, queuePipelineDir, 'autopilot-queue-report.json'))
+    expect(result.statePath).toBe(join(root, queuePipelineDir, 'autopilot-state.json'))
   })
 
   it('skips block-labeled queue issues before ranking', async () => {

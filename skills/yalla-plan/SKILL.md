@@ -43,7 +43,7 @@ Before spawning agents, read:
 - Your project's conventions doc (CLAUDE.md / AGENTS.md)
 - Relevant docs/decisions and docs/architecture files for the task area
 
-If the task has unresolved domain language, ask one precise question at a time before final plan approval. If the task is a bug/perf regression and no `.pipeline/diagnosis.json` exists, run the diagnosis protocol before writing the full plan.
+If the task has unresolved domain language, ask one precise question at a time before final plan approval. If the task is a bug/perf regression and no `<run-state>/diagnosis.json` exists, run the diagnosis protocol before writing the full plan.
 
 ```
 TeamCreate: team_name = "yalla-plan-issue-###"
@@ -219,13 +219,13 @@ Files likely affected:
 
 ## Artifact Manifest
 - `plans/active/issue-###.plan.json`
-- `.pipeline/architecture-alignment.json`
-- `.pipeline/product-intent.json`
-- `.pipeline/external-grounding.json` [when applicable]
-- `.pipeline/runtime-e2e-preflight.json` [when applicable]
-- `.pipeline/acceptance-trace.json`
-- `.pipeline/test-evidence.json`
-- `.pipeline/review-results.json`
+- `<run-state>/architecture-alignment.json`
+- `<run-state>/product-intent.json`
+- `<run-state>/external-grounding.json` [when applicable]
+- `<run-state>/runtime-e2e-preflight.json` [when applicable]
+- `<run-state>/acceptance-trace.json`
+- `<run-state>/test-evidence.json`
+- `<run-state>/review-results.json`
 ```
 
 The JSON plan must follow `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARTIFACTS.md` and include `issue_id`, `task_type`, `phase_split_required`, `risk_tier`, `evidence_mode`, `domain_terms`, `architecture_docs`, `interfaces`, `vertical_slices`, and `risks`.
@@ -271,7 +271,7 @@ After approval:
 
 1. Write or update the GitHub issue body/comment using `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/AGENT-BRIEF.md`.
 2. Persist the approved plan path in `.pipeline-state.json`.
-3. Initialize `.pipeline/acceptance-trace.json` with every acceptance criterion in `status: "pending"`.
+3. Initialize `<run-state>/acceptance-trace.json` with every acceptance criterion in `status: "pending"`.
 
 ## Fallback: Sub-Agent Mode
 

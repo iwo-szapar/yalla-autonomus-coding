@@ -22,7 +22,7 @@ Do not proceed until:
 
 - The loop produces the user-reported symptom, not a nearby failure.
 - The loop is deterministic enough to debug, or the reproduction rate has been raised for flaky bugs.
-- The exact symptom is captured in `.pipeline/diagnosis.json`.
+- The exact symptom is captured in `<run-state>/diagnosis.json`.
 
 ## Phase 3: Hypothesize
 
@@ -44,7 +44,7 @@ Write or preserve the regression test at the correct seam before applying the fi
 
 ## Artifact
 
-Write `.pipeline/diagnosis.json`:
+Write `<run-state>/diagnosis.json`:
 
 ```json
 {

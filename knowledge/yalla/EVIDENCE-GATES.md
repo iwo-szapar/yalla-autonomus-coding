@@ -6,13 +6,13 @@ Use these gates only when their trigger applies. They make review evidence gener
 
 Trigger: the planned behavior relies on an external API, SDK, protocol, browser/provider/platform behavior, or generated setup instructions.
 
-Write `.pipeline/external-grounding.json` before implementation. Record current official/upstream sources, the precise claims used, access date, and the implementation consequences. If evidence is unavailable or conflicts, record `inconclusive`; the affected promise cannot support `PROVEN`.
+Write `<run-state>/external-grounding.json` before implementation. Record current official/upstream sources, the precise claims used, access date, and the implementation consequences. If evidence is unavailable or conflicts, record `inconclusive`; the affected promise cannot support `PROVEN`.
 
 ## Runtime E2E preflight
 
 Trigger: a run claims preview, staging, production, remote, or other real-environment proof.
 
-Write `.pipeline/runtime-e2e-preflight.json` before the run. It must bind the evidence to the deployed target revision and base revision, required environment and data shape without secret values, mutation guardrails, inherited baseline failures, skip classification, and exact `proves` / `does_not_prove` lists.
+Write `<run-state>/runtime-e2e-preflight.json` before the run. It must bind the evidence to the deployed target revision and base revision, required environment and data shape without secret values, mutation guardrails, inherited baseline failures, skip classification, and exact `proves` / `does_not_prove` lists.
 
 Classify skips as `intentional-guard-skip` or `unresolved-proof-gap`. The latter blocks `PROVEN`; the former is valid only when `does_not_prove` names the skipped behavior and the PR does not claim it. Applicable runtime proof must have `status: pass` to support `PROVEN`.
 

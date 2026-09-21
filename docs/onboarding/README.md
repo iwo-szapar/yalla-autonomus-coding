@@ -47,7 +47,8 @@ npm run yalla:onboard -- init --config /path/to/your-project/.claude/YALLA.md
 npm run yalla:onboard -- check --config /path/to/your-project/.claude/YALLA.md
 npm run yalla:onboard -- labels --dry-run --config /path/to/your-project/.claude/YALLA.md
 npm run yalla:onboard -- template --dry-run --config /path/to/your-project/.claude/YALLA.md
-npm run yalla:run -- doctor --config /path/to/your-project/.claude/YALLA.md
+ISSUE_ID=issue-123 RUN_ID=attempt-1 RUN_STATE=.pipeline/runs/issue-123/attempt-1
+npm run yalla:run -- doctor --pipeline-dir "$RUN_STATE" --issue-id "$ISSUE_ID" --run-id "$RUN_ID" --config /path/to/your-project/.claude/YALLA.md
 ```
 
 Only `--apply` mutates labels or writes the issue template. Dry-run commands only report what would happen.
@@ -104,7 +105,7 @@ verifiers:
   api: "npm test"
   ui: "npm run test:e2e"
   browser_interactions: "npm run test:e2e -- --grep @browser-interaction"
-  visual: ".pipeline/visual-evidence/"
+  visual: "<run-state>/visual-evidence/"
 
 test_dir: tests/
 test_file_glob: "**/*.test.*"
@@ -180,11 +181,11 @@ Avoid these for the first run:
 Your repo is onboarded when:
 
 - `/yalla <small task>` opens a PR or clearly reports why it cannot.
-- `.pipeline/outcome-evaluation.json` exists for the run.
+- `.pipeline/runs/<issue-id>/<run-id>/outcome-evaluation.json` exists for the run.
 - The verdict is understood: `PROVEN`, `NOT_PROVEN`, or `INCONCLUSIVE`.
 - Review checks point to your real project rules, not just generic examples.
 - A second run can reuse the same config without you restating repo conventions.
 
-For operator visibility, a healthy manual run also has `.pipeline/events.jsonl`, `.pipeline/latest-checkpoint.json`, and `.pipeline/report.html`. Generate or inspect these from the cloned Yalla repo with `npm run yalla:run -- status|report|export --config /path/to/your-project/.claude/YALLA.md`.
+For operator visibility, a healthy manual run also has `events.jsonl`, `latest-checkpoint.json`, and `report.html` inside its canonical `.pipeline/runs/<issue-id>/<run-id>/` namespace. Generate or inspect them from the cloned Yalla repo with `npm run yalla:run -- status|report|export --pipeline-dir <run-state> --issue-id <issue-id> --run-id <run-id> --config /path/to/your-project/.claude/YALLA.md`.
 
 Autopilot is onboarded separately. Do not treat a successful manual `/yalla` run as permission for scheduled automation.

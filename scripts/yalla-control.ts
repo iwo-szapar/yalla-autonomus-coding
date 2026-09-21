@@ -16,8 +16,8 @@ import {
 } from 'node:fs'
 import { dirname, isAbsolute, normalize, relative, resolve, sep } from 'node:path'
 
-export const CONTROL_SCHEMA_VERSION = 1
-export const YALLA_CONTROL_VERSION = '1.4.0'
+export const CONTROL_SCHEMA_VERSION = 2
+export const YALLA_CONTROL_VERSION = '1.4.1'
 
 export const CAPABILITIES = [
   'read_repo',
@@ -92,6 +92,7 @@ export type CandidateIdentity = {
   repository: string
   declared_repository?: string
   root_dir: string
+  pipeline_dir: string
   worktree_path: string
   branch: string
   base_branch: string
@@ -138,6 +139,7 @@ export type OperationReceipt = {
   status: 'pending' | 'succeeded' | 'failed'
   candidate_id: string
   candidate_sha: string
+  pipeline_dir: string
   approval_reference?: string
   execution_authority: 'local-configured-capability' | 'none-local-telemetry-only'
   recorded_at: string
@@ -154,6 +156,7 @@ export type RemoteJob = {
   retry_reason?: string
   candidate_id: string
   candidate_sha: string
+  pipeline_dir: string
   recorded_at: string
   completed_at?: string
   execution_authority: 'none-local-telemetry-only'
@@ -161,6 +164,7 @@ export type RemoteJob = {
 
 type CandidateOptions = {
   rootDir: string
+  pipelineDir?: string
   repository?: string
   baseBranch?: string
   runId?: string
@@ -198,10 +202,55 @@ export function atomicWriteText(path: string, value: string) {
   renameSync(tempPath, path)
 }
 
-export function acquireRunLock(rootDir: string, owner: string, now: () => string = () => new Date().toISOString()): RunLock {
-  const pipelineDir = resolve(rootDir, '.pipeline')
-  mkdirSync(pipelineDir, { recursive: true })
-  const path = resolve(pipelineDir, 'run.lock')
+export function resolvePipelineStateDir(rootDir: string, requested = '.pipeline'): { absolute: string; relative: string } {
+  const root = realpathOrResolved(rootDir)
+  const requestedValue = String(requested ?? '')
+  const raw = requestedValue.trim()
+  if (!raw) throw new Error('Pipeline directory must be a non-empty repository-contained path.')
+  if (raw !== requestedValue || raw.endsWith('/')) throw new Error(`Pipeline directory must be canonical and cannot contain aliases: ${requested}`)
+  if (raw.includes('\\')) throw new Error(`Pipeline directory must use canonical path separators: ${requested}`)
+
+  const normalizedRequest = normalize(raw)
+  if (normalizedRequest !== raw) throw new Error(`Pipeline directory must be canonical and cannot contain aliases: ${requested}`)
+
+  const lexicalRoot = resolve(rootDir)
+  const lexicalAbsolute = isAbsolute(raw) ? resolve(raw) : resolve(lexicalRoot, raw)
+  const lexicalRelative = relative(lexicalRoot, lexicalAbsolute)
+  const requestedThroughRootAlias = lexicalRelative && lexicalRelative !== '..' && !lexicalRelative.startsWith(`..${sep}`) && !isAbsolute(lexicalRelative)
+  const absolute = (requestedThroughRootAlias ? resolve(root, lexicalRelative) : lexicalAbsolute).replaceAll(sep, '/')
+  const relativePath = relative(root, absolute).replaceAll('\\', '/')
+  if (!relativePath || relativePath === '.' || relativePath === '..' || relativePath.startsWith('../') || isAbsolute(relativePath)) {
+    throw new Error(`Pipeline directory must stay inside the repository: ${requested}`)
+  }
+  if (relativePath !== '.pipeline' && !/^\.pipeline\/runs\/[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(relativePath)) {
+    throw new Error(`Pipeline directory must be .pipeline for legacy reads or a canonical .pipeline/runs/<issue-id>/<run-id> namespace: ${requested}`)
+  }
+
+  let cursor = root
+  for (const segment of relativePath.split('/')) {
+    cursor = resolve(cursor, segment)
+    if (existsSync(cursor) && lstatSync(cursor).isSymbolicLink()) {
+      throw new Error(`Pipeline directory cannot traverse a symbolic link: ${requested}`)
+    }
+  }
+  if (existsSync(absolute) && !statSync(absolute).isDirectory()) {
+    throw new Error(`Pipeline directory must resolve to a directory: ${requested}`)
+  }
+  return { absolute, relative: relativePath }
+}
+
+export function canonicalPipelineStateDir(issueId: string | undefined, runId: string | undefined) {
+  const issue = String(issueId ?? '').trim()
+  const run = String(runId ?? '').trim()
+  const component = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+  if (!component.test(issue) || !component.test(run)) throw new Error('Stable issue and run IDs must be canonical path components containing only letters, numbers, dot, underscore, or dash.')
+  return `.pipeline/runs/${issue}/${run}`
+}
+
+export function acquireRunLock(rootDir: string, owner: string, now: () => string = () => new Date().toISOString(), pipelineDir?: string): RunLock {
+  const stateDir = resolveWritablePipelineStateDir(rootDir, pipelineDir)
+  mkdirSync(stateDir.absolute, { recursive: true })
+  const path = resolve(stateDir.absolute, 'run.lock')
   const token = randomUUID()
   let descriptor: number
   try {
@@ -225,8 +274,8 @@ export function releaseRunLock(lock: RunLock) {
   rmSync(lock.path)
 }
 
-export async function withRunLock<T>(rootDir: string, owner: string, action: () => Promise<T> | T): Promise<T> {
-  const lock = acquireRunLock(rootDir, owner)
+export async function withRunLock<T>(rootDir: string, owner: string, action: () => Promise<T> | T, pipelineDir: string): Promise<T> {
+  const lock = acquireRunLock(rootDir, owner, undefined, pipelineDir)
   try {
     return await action()
   } finally {
@@ -237,8 +286,11 @@ export async function withRunLock<T>(rootDir: string, owner: string, action: () 
 export function createCandidateIdentity(options: CandidateOptions): CandidateIdentity {
   const now = options.now ?? (() => new Date().toISOString())
   const rootDir = realpathOrResolved(options.rootDir)
-  const git = inspectGit(rootDir, options.baseBranch ?? 'main')
-  const contractDigest = digestFile(resolve(rootDir, '.pipeline/goal-contract.json'))
+  const expectedPipelineDir = canonicalPipelineStateDir(options.issueId, options.runId)
+  const pipelineDir = resolvePipelineStateDir(rootDir, options.pipelineDir ?? expectedPipelineDir)
+  if (pipelineDir.relative !== expectedPipelineDir) throw new Error(`Candidate issue/run identity requires pipeline directory ${expectedPipelineDir}, not ${pipelineDir.relative}.`)
+  const git = inspectGit(rootDir, options.baseBranch ?? 'main', pipelineDir.relative)
+  const contractDigest = digestFile(resolve(pipelineDir.absolute, 'goal-contract.json'))
   const configPath = options.configPath ? resolve(rootDir, options.configPath) : resolve(rootDir, '.claude/YALLA.md')
   const configDigest = digestFile(configPath)
   const policyDigest = digestPolicy(rootDir, options.releaseAdapterPath)
@@ -256,6 +308,7 @@ export function createCandidateIdentity(options: CandidateOptions): CandidateIde
     repository: observedRepository,
     declared_repository: declaredRepository,
     root_dir: rootDir,
+    pipeline_dir: pipelineDir.relative,
     worktree_path: git.worktreePath,
     branch: git.branch,
     base_branch: options.baseBranch ?? 'main',
@@ -272,7 +325,7 @@ export function createCandidateIdentity(options: CandidateOptions): CandidateIde
 export function validateCandidate(candidate: CandidateIdentity, options: Omit<CandidateOptions, 'runId' | 'issueId' | 'now'>): CandidateValidation {
   const requiredStrings: Array<keyof CandidateIdentity> = [
     'yalla_version', 'candidate_id', 'created_at', 'run_id', 'repository', 'root_dir', 'worktree_path', 'branch',
-    'base_branch', 'base_sha', 'head_sha', 'dirty_fingerprint', 'contract_digest', 'config_digest', 'policy_digest',
+    'pipeline_dir', 'base_branch', 'base_sha', 'head_sha', 'dirty_fingerprint', 'contract_digest', 'config_digest', 'policy_digest',
   ]
   if (!candidate || typeof candidate !== 'object' || requiredStrings.some(field => typeof candidate[field] !== 'string' || !String(candidate[field]).trim())) {
     return { state: 'INCOMPATIBLE_SCHEMA', reasons: ['candidate is missing required identity fields'] }
@@ -295,6 +348,7 @@ export function validateCandidate(candidate: CandidateIdentity, options: Omit<Ca
       issueId: candidate.issue_id,
       repository: options.repository ?? candidate.declared_repository,
       baseBranch: options.baseBranch ?? candidate.base_branch,
+      pipelineDir: candidate.pipeline_dir,
       now: () => candidate.created_at,
     })
   } catch (error) {
@@ -303,6 +357,7 @@ export function validateCandidate(candidate: CandidateIdentity, options: Omit<Ca
 
   const identityReasons: string[] = []
   if (candidate.root_dir !== current.root_dir) identityReasons.push(`root directory changed from ${candidate.root_dir} to ${current.root_dir}`)
+  if (candidate.pipeline_dir !== current.pipeline_dir) identityReasons.push(`pipeline directory changed from ${candidate.pipeline_dir} to ${current.pipeline_dir}`)
   if (candidate.repository !== current.repository) identityReasons.push(`repository changed from ${candidate.repository} to ${current.repository}`)
   if (candidate.declared_repository !== current.declared_repository) identityReasons.push(`declared repository changed from ${candidate.declared_repository ?? '<auto>'} to ${current.declared_repository ?? '<auto>'}`)
   if (candidate.worktree_path !== current.worktree_path) identityReasons.push(`worktree changed from ${candidate.worktree_path} to ${current.worktree_path}`)
@@ -431,6 +486,7 @@ export function requiredCapabilityForCommand(command: string, args: string[]): C
 
 export function recordOperationReceipt(input: {
   rootDir: string
+  pipelineDir?: string
   candidate: CandidateIdentity
   allowedCapabilities: Capability[]
   operationId: string
@@ -446,11 +502,15 @@ export function recordOperationReceipt(input: {
   if (PROTECTED_CAPABILITIES.has(input.capability)) {
     throw new Error(`Protected capability ${input.capability} cannot be authorized by the local Yalla runner; use an external operator-controlled executor.`)
   }
-  const path = resolve(input.rootDir, '.pipeline/operation-receipts.json')
+  const stateDir = resolveCandidatePipelineStateDir(input.rootDir, input.candidate, input.pipelineDir)
+  const path = resolve(stateDir.absolute, 'operation-receipts.json')
   const document = safeReadJson(path)
+  assertStateDocumentNamespace(document, stateDir.relative, path)
   const receipts = Array.isArray(document?.receipts) ? document.receipts as OperationReceipt[] : []
+  if (receipts.some(receipt => receipt.pipeline_dir !== stateDir.relative)) throw new Error(`Operation receipts in ${path} contain mismatched pipeline directory metadata.`)
   const existing = receipts.find(receipt => receipt.operation_id === input.operationId)
   if (existing) {
+    if (existing.pipeline_dir !== stateDir.relative) throw new Error(`Operation ${input.operationId} is bound to pipeline directory ${existing.pipeline_dir}.`)
     if (existing.execution_authority !== 'local-configured-capability') throw new Error(`Operation ${input.operationId} has incompatible or non-local authority metadata.`)
     if (existing.capability !== input.capability || existing.action !== input.action || existing.target !== input.target || existing.candidate_id !== input.candidate.candidate_id) {
       throw new Error(`Operation ID ${input.operationId} already belongs to a different action or candidate.`)
@@ -458,7 +518,7 @@ export function recordOperationReceipt(input: {
     if (operationStatus === 'pending' || existing.status === operationStatus) return { status: 'duplicate', receipt: existing }
     if (existing.status !== 'pending') throw new Error(`Operation ${input.operationId} is already terminal with status ${existing.status}.`)
     const updated: OperationReceipt = { ...existing, status: operationStatus, completed_at: nowValue }
-    atomicWriteJson(path, { schema_version: CONTROL_SCHEMA_VERSION, yalla_version: YALLA_CONTROL_VERSION, receipts: receipts.map(receipt => receipt.operation_id === input.operationId ? updated : receipt) })
+    atomicWriteJson(path, { schema_version: CONTROL_SCHEMA_VERSION, yalla_version: YALLA_CONTROL_VERSION, pipeline_dir: stateDir.relative, receipts: receipts.map(receipt => receipt.operation_id === input.operationId ? updated : receipt) })
     return { status: 'updated', receipt: updated }
   }
   if (operationStatus !== 'pending') throw new Error(`Operation ${input.operationId} must be reserved as pending before it can become ${operationStatus}.`)
@@ -471,15 +531,17 @@ export function recordOperationReceipt(input: {
     status: 'pending',
     candidate_id: input.candidate.candidate_id,
     candidate_sha: input.candidate.head_sha,
+    pipeline_dir: stateDir.relative,
     execution_authority: 'local-configured-capability',
     recorded_at: nowValue,
   }
-  atomicWriteJson(path, { schema_version: CONTROL_SCHEMA_VERSION, yalla_version: YALLA_CONTROL_VERSION, receipts: [...receipts, receipt] })
+  atomicWriteJson(path, { schema_version: CONTROL_SCHEMA_VERSION, yalla_version: YALLA_CONTROL_VERSION, pipeline_dir: stateDir.relative, receipts: [...receipts, receipt] })
   return { status: 'recorded', receipt }
 }
 
 export function completeOperationReceipt(input: {
   rootDir: string
+  pipelineDir?: string
   operationId: string
   capability: Capability
   action: string
@@ -487,23 +549,28 @@ export function completeOperationReceipt(input: {
   status: 'succeeded' | 'failed'
   now?: () => string
 }) {
-  const path = resolve(input.rootDir, '.pipeline/operation-receipts.json')
+  const stateDir = resolveWritablePipelineStateDir(input.rootDir, input.pipelineDir)
+  const path = resolve(stateDir.absolute, 'operation-receipts.json')
   const document = safeReadJson(path)
+  assertStateDocumentNamespace(document, stateDir.relative, path)
   const receipts = Array.isArray(document?.receipts) ? document.receipts as OperationReceipt[] : []
+  if (receipts.some(receipt => receipt.pipeline_dir !== stateDir.relative)) throw new Error(`Operation receipts in ${path} contain mismatched pipeline directory metadata.`)
   const existing = receipts.find(receipt => receipt.operation_id === input.operationId)
   if (!existing) throw new Error(`Operation ${input.operationId} must be reserved before it can become ${input.status}.`)
+  if (existing.pipeline_dir !== stateDir.relative) throw new Error(`Operation ${input.operationId} is bound to pipeline directory ${existing.pipeline_dir}.`)
   if (existing.capability !== input.capability || existing.action !== input.action || existing.target !== input.target) throw new Error(`Operation ID ${input.operationId} belongs to a different action or target.`)
   const expectedAuthority = PROTECTED_CAPABILITIES.has(existing.capability) ? 'none-local-telemetry-only' : 'local-configured-capability'
   if (existing.execution_authority !== expectedAuthority) throw new Error(`Operation ${input.operationId} cannot be completed: expected execution_authority ${expectedAuthority}.`)
   if (existing.status === input.status) return { status: 'duplicate' as const, receipt: existing }
   if (existing.status !== 'pending') throw new Error(`Operation ${input.operationId} is already terminal with status ${existing.status}.`)
   const updated: OperationReceipt = { ...existing, status: input.status, completed_at: (input.now ?? (() => new Date().toISOString()))() }
-  atomicWriteJson(path, { schema_version: CONTROL_SCHEMA_VERSION, yalla_version: YALLA_CONTROL_VERSION, receipts: receipts.map(receipt => receipt.operation_id === input.operationId ? updated : receipt) })
+  atomicWriteJson(path, { schema_version: CONTROL_SCHEMA_VERSION, yalla_version: YALLA_CONTROL_VERSION, pipeline_dir: stateDir.relative, receipts: receipts.map(receipt => receipt.operation_id === input.operationId ? updated : receipt) })
   return { status: 'updated' as const, receipt: updated }
 }
 
 export function recordRemoteJob(input: {
   rootDir: string
+  pipelineDir?: string
   candidate: CandidateIdentity
   operationId: string
   kind: RemoteJob['kind']
@@ -516,11 +583,15 @@ export function recordRemoteJob(input: {
 }): { status: 'recorded' | 'duplicate' | 'updated'; job: RemoteJob } {
   if (!Number.isFinite(input.durationSeconds) || input.durationSeconds < 0) throw new Error('Remote job duration must be a non-negative finite number.')
   if (input.cost !== undefined && (!Number.isFinite(input.cost) || input.cost < 0)) throw new Error('Remote job cost must be a non-negative finite number when provided.')
-  const path = resolve(input.rootDir, '.pipeline/remote-jobs.json')
+  const stateDir = resolveCandidatePipelineStateDir(input.rootDir, input.candidate, input.pipelineDir)
+  const path = resolve(stateDir.absolute, 'remote-jobs.json')
   const document = safeReadJson(path)
+  assertStateDocumentNamespace(document, stateDir.relative, path)
   const jobs = Array.isArray(document?.jobs) ? document.jobs as RemoteJob[] : []
+  if (jobs.some(job => job.pipeline_dir !== stateDir.relative)) throw new Error(`Remote jobs in ${path} contain mismatched pipeline directory metadata.`)
   const existing = jobs.find(job => job.operation_id === input.operationId)
   if (existing) {
+    if (existing.pipeline_dir !== stateDir.relative) throw new Error(`Remote job ${input.operationId} is bound to pipeline directory ${existing.pipeline_dir}.`)
     if (existing.execution_authority !== 'none-local-telemetry-only') throw new Error(`Remote job ${input.operationId} has incompatible authority metadata.`)
     if (existing.candidate_id !== input.candidate.candidate_id || existing.kind !== input.kind || existing.artifact_action !== input.artifactAction) {
       throw new Error(`Remote job ID ${input.operationId} already belongs to a different job or candidate.`)
@@ -537,7 +608,7 @@ export function recordRemoteJob(input: {
       retry_reason: input.retryReason,
       completed_at: (input.now ?? (() => new Date().toISOString()))(),
     }
-    writeRemoteJobs(path, input.candidate.candidate_id, jobs.map(job => job.operation_id === input.operationId ? updated : job))
+    writeRemoteJobs(path, stateDir.relative, input.candidate.candidate_id, jobs.map(job => job.operation_id === input.operationId ? updated : job))
     return { status: 'updated', job: updated }
   }
   if (!['pending', 'blocked'].includes(input.status)) throw new Error(`Remote job ${input.operationId} must be reserved before it can become ${input.status}.`)
@@ -551,16 +622,18 @@ export function recordRemoteJob(input: {
     retry_reason: input.retryReason,
     candidate_id: input.candidate.candidate_id,
     candidate_sha: input.candidate.head_sha,
+    pipeline_dir: stateDir.relative,
     recorded_at: (input.now ?? (() => new Date().toISOString()))(),
     execution_authority: 'none-local-telemetry-only',
   }
   const nextJobs = [...jobs, job]
-  writeRemoteJobs(path, input.candidate.candidate_id, nextJobs)
+  writeRemoteJobs(path, stateDir.relative, input.candidate.candidate_id, nextJobs)
   return { status: 'recorded', job }
 }
 
 export function completeRemoteJob(input: {
   rootDir: string
+  pipelineDir?: string
   operationId: string
   kind: RemoteJob['kind']
   artifactAction: RemoteJob['artifact_action']
@@ -572,26 +645,31 @@ export function completeRemoteJob(input: {
 }) {
   if (!Number.isFinite(input.durationSeconds) || input.durationSeconds < 0) throw new Error('Remote job duration must be a non-negative finite number.')
   if (input.cost !== undefined && (!Number.isFinite(input.cost) || input.cost < 0)) throw new Error('Remote job cost must be a non-negative finite number when provided.')
-  const path = resolve(input.rootDir, '.pipeline/remote-jobs.json')
+  const stateDir = resolveWritablePipelineStateDir(input.rootDir, input.pipelineDir)
+  const path = resolve(stateDir.absolute, 'remote-jobs.json')
   const document = safeReadJson(path)
+  assertStateDocumentNamespace(document, stateDir.relative, path)
   const jobs = Array.isArray(document?.jobs) ? document.jobs as RemoteJob[] : []
+  if (jobs.some(job => job.pipeline_dir !== stateDir.relative)) throw new Error(`Remote jobs in ${path} contain mismatched pipeline directory metadata.`)
   const existing = jobs.find(job => job.operation_id === input.operationId)
   if (!existing) throw new Error(`Remote job ${input.operationId} must be reserved before it can become ${input.status}.`)
+  if (existing.pipeline_dir !== stateDir.relative) throw new Error(`Remote job ${input.operationId} is bound to pipeline directory ${existing.pipeline_dir}.`)
   if (existing.execution_authority !== 'none-local-telemetry-only') throw new Error(`Remote job ${input.operationId} cannot be completed without execution_authority none-local-telemetry-only.`)
   if (existing.kind !== input.kind || existing.artifact_action !== input.artifactAction) throw new Error(`Remote job ID ${input.operationId} belongs to a different job.`)
   if (existing.status === input.status) return { status: 'duplicate' as const, job: existing }
   if (existing.status !== 'pending') throw new Error(`Remote job ${input.operationId} cannot move from ${existing.status} to ${input.status}.`)
   const updated: RemoteJob = { ...existing, status: input.status, duration_seconds: input.durationSeconds, cost: input.cost, retry_reason: input.retryReason, completed_at: (input.now ?? (() => new Date().toISOString()))() }
-  writeRemoteJobs(path, existing.candidate_id, jobs.map(job => job.operation_id === input.operationId ? updated : job))
+  writeRemoteJobs(path, stateDir.relative, existing.candidate_id, jobs.map(job => job.operation_id === input.operationId ? updated : job))
   return { status: 'updated' as const, job: updated }
 }
 
-function writeRemoteJobs(path: string, candidateId: string, jobs: RemoteJob[]) {
+function writeRemoteJobs(path: string, pipelineDir: string, candidateId: string, jobs: RemoteJob[]) {
   const candidateJobs = jobs.filter(item => item.candidate_id === candidateId)
   const consumedJobs = candidateJobs.filter(item => item.status !== 'blocked')
   atomicWriteJson(path, {
     schema_version: CONTROL_SCHEMA_VERSION,
     yalla_version: YALLA_CONTROL_VERSION,
+    pipeline_dir: pipelineDir,
     candidate_id: candidateId,
     jobs,
     summary: {
@@ -611,6 +689,7 @@ function writeRemoteJobs(path: string, candidateId: string, jobs: RemoteJob[]) {
 
 export function checkRemoteJobBudget(input: {
   rootDir: string
+  pipelineDir?: string
   candidate: CandidateIdentity
   operationId: string
   kind: RemoteJob['kind']
@@ -621,8 +700,12 @@ export function checkRemoteJobBudget(input: {
     max_production_builds_per_candidate: number
   }
 }) {
-  const document = safeReadJson(resolve(input.rootDir, '.pipeline/remote-jobs.json'))
+  const stateDir = resolveCandidatePipelineStateDir(input.rootDir, input.candidate, input.pipelineDir)
+  const path = resolve(stateDir.absolute, 'remote-jobs.json')
+  const document = safeReadJson(path)
+  assertStateDocumentNamespace(document, stateDir.relative, path)
   const jobs = Array.isArray(document?.jobs) ? document.jobs as RemoteJob[] : []
+  if (jobs.some(job => job.pipeline_dir !== stateDir.relative)) throw new Error(`Remote jobs in ${path} contain mismatched pipeline directory metadata.`)
   const existing = jobs.find(job => job.operation_id === input.operationId)
   if (existing?.status === 'blocked') return { allowed: false as const, duplicate: true, reason: existing.retry_reason || 'remote job reservation was blocked' }
   if (existing) return { allowed: true as const, duplicate: true, reason: '' }
@@ -726,12 +809,18 @@ export function assertWorktreeCleanupSafe(rootDir: string) {
   return { safe: true as const, ignored_pipeline_state: output.split('\n').filter(line => line.includes('.pipeline')).length }
 }
 
-export function readCandidate(rootDir: string): CandidateIdentity | null {
-  return safeReadJson(resolve(rootDir, '.pipeline/candidate.json')) as CandidateIdentity | null
+export function readCandidate(rootDir: string, pipelineDir?: string): CandidateIdentity | null {
+  const stateDir = resolvePipelineStateDir(rootDir, pipelineDir)
+  const candidate = safeReadJson(resolve(stateDir.absolute, 'candidate.json')) as CandidateIdentity | null
+  if (candidate?.pipeline_dir && candidate.pipeline_dir !== stateDir.relative) {
+    throw new Error(`Candidate is bound to pipeline directory ${String(candidate.pipeline_dir)} and cannot be read from ${stateDir.relative}.`)
+  }
+  return candidate
 }
 
-export function writeCandidate(rootDir: string, candidate: CandidateIdentity) {
-  const path = resolve(rootDir, '.pipeline/candidate.json')
+export function writeCandidate(rootDir: string, candidate: CandidateIdentity, pipelineDir?: string) {
+  const stateDir = resolveCandidatePipelineStateDir(rootDir, candidate, pipelineDir)
+  const path = resolve(stateDir.absolute, 'candidate.json')
   atomicWriteJson(path, candidate)
   return path
 }
@@ -740,7 +829,7 @@ export function readJsonDocument(path: string) {
   return safeReadJson(path)
 }
 
-function inspectGit(rootDir: string, baseBranch: string) {
+function inspectGit(rootDir: string, baseBranch: string, pipelineDir: string) {
   const run = (args: string[]) => execFileSync('git', args, { cwd: rootDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
   const worktreePath = realpathOrResolved(run(['rev-parse', '--show-toplevel']))
   const branch = run(['branch', '--show-current']) || 'DETACHED'
@@ -751,12 +840,15 @@ function inspectGit(rootDir: string, baseBranch: string) {
     ['merge-base', 'HEAD', `origin/${baseBranch}`],
     ['merge-base', 'HEAD', baseBranch],
   ])
-  const materialDiff = run(['diff', '--binary', 'HEAD', '--', '.', ':(exclude).pipeline/**', ':(exclude).pipeline-state.json'])
+  const stateExclusions = pipelineDir === '.pipeline' || pipelineDir.startsWith('.pipeline/')
+    ? []
+    : [`:(exclude,literal)${pipelineDir}`, `:(exclude,glob)${pipelineDir}/**`]
+  const materialDiff = run(['diff', '--binary', 'HEAD', '--', '.', ':(exclude).pipeline/**', ':(exclude).pipeline-state.json', ...stateExclusions])
   const untrackedFiles = run(['ls-files', '--others', '--exclude-standard', '-z'])
     .split('\0')
     .filter(Boolean)
     .map(path => path.replaceAll('\\', '/'))
-    .filter(path => path !== '.pipeline-state.json' && !path.startsWith('.pipeline/'))
+    .filter(path => path !== '.pipeline-state.json' && !path.startsWith('.pipeline/') && path !== pipelineDir && !path.startsWith(`${pipelineDir}/`))
     .sort()
     .map(path => ({ path, digest: digestFile(resolve(rootDir, path)) }))
   return { worktreePath, branch, headSha, repository, baseSha, dirtyFingerprint: hashValue({ materialDiff, untrackedFiles }) }
@@ -848,6 +940,28 @@ function candidateAddress(candidate: Omit<CandidateIdentity, 'candidate_id'> | C
   delete address.created_at
   if (address.declared_repository === undefined) delete address.declared_repository
   return address
+}
+
+function resolveCandidatePipelineStateDir(rootDir: string, candidate: CandidateIdentity, requested?: string) {
+  const stateDir = resolvePipelineStateDir(rootDir, requested ?? candidate.pipeline_dir)
+  const boundStateDir = resolvePipelineStateDir(rootDir, candidate.pipeline_dir)
+  if (stateDir.relative !== boundStateDir.relative) {
+    throw new Error(`Candidate ${candidate.candidate_id} is bound to pipeline directory ${boundStateDir.relative}; refusing namespace ${stateDir.relative}.`)
+  }
+  return stateDir
+}
+
+function resolveWritablePipelineStateDir(rootDir: string, requested?: string) {
+  if (!requested) throw new Error('A canonical pipeline issue/run namespace is required for mutation.')
+  const stateDir = resolvePipelineStateDir(rootDir, requested)
+  if (stateDir.relative === '.pipeline') throw new Error('Legacy root .pipeline is read-only; select a canonical issue/run namespace.')
+  return stateDir
+}
+
+function assertStateDocumentNamespace(document: Record<string, unknown> | null, pipelineDir: string, path: string) {
+  if (document && document.pipeline_dir !== pipelineDir) {
+    throw new Error(`State document ${path} is not bound to pipeline directory ${pipelineDir}.`)
+  }
 }
 
 function safeReadJson(path: string): Record<string, unknown> | null {

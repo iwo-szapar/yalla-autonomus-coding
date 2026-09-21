@@ -45,7 +45,7 @@ models:
 verifiers:
   api: "npm test"
   browser_interactions: "npm run test:e2e -- --grep @browser-interaction"
-  visual: ".pipeline/visual-evidence/"
+  visual: "<run-state>/visual-evidence/"
 
 task_system:
   provider: linear

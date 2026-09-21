@@ -24,7 +24,7 @@ verifiers:
   ui: "npm run test:e2e"
   perf: "npm run benchmark"
   docs: "npm run docs:check"
-  visual: ".pipeline/visual-evidence/"
+  visual: "<run-state>/visual-evidence/"
 ```
 
 These entries are hints for planning and reporting. They do not run automatically from `yalla:run`; the agent must still execute the right verifier and record the evidence.
@@ -36,7 +36,7 @@ Each `goal-contract.json` should name the required evidence. Map each item to on
 Good evidence:
 
 - `npm test` passes for the public route test.
-- Playwright screenshot saved to `.pipeline/visual-evidence/dashboard-after.png`.
+- Playwright screenshot saved to `<run-state>/visual-evidence/dashboard-after.png`.
 - Benchmark JSON shows p95 latency did not regress.
 - Independent evaluator returns `PASS` after reading the goal contract and artifacts.
 
@@ -50,11 +50,11 @@ Weak evidence:
 
 The executor writes code and implementation notes. The evaluator reads only:
 
-- `.pipeline/goal-contract.json`
+- `<run-state>/goal-contract.json`
 - changed files or diff summary
 - deterministic verifier outputs
 - visual/benchmark artifacts
-- `.pipeline/evaluator-results.json` history when rerunning
+- `<run-state>/evaluator-results.json` history when rerunning
 
 The evaluator returns `PASS`, `FAIL`, or `INCONCLUSIVE` plus findings and next
 instruction, bound to the active candidate. `FAIL` also declares a failure
@@ -65,13 +65,13 @@ input.
 
 ## Artifacts
 
-- Goal contract: `.pipeline/goal-contract.json`
-- Candidate identity: `.pipeline/candidate.json`
-- Inherited baseline: `.pipeline/baseline.json`
-- Evaluator results: `.pipeline/evaluator-results.json`
-- Loop state: `.pipeline/loop-state.json`
-- Session mining: `.pipeline/session-mining-report.json`
-- Visual evidence: `.pipeline/visual-evidence/*.{png,jpg,jpeg,webp,gif,svg}`
-- Benchmarks: `.pipeline/benchmarks.json`
-- Operation telemetry and idempotency: `.pipeline/operation-receipts.json`; require `local-configured-capability` for locally authorized routine actions and `none-local-telemetry-only` for protected-action mirrors, which are never execution authority
-- Remote build/job cost evidence: `.pipeline/remote-jobs.json`
+- Goal contract: `<run-state>/goal-contract.json`
+- Candidate identity: `<run-state>/candidate.json`
+- Inherited baseline: `<run-state>/baseline.json`
+- Evaluator results: `<run-state>/evaluator-results.json`
+- Loop state: `<run-state>/loop-state.json`
+- Session mining: `<run-state>/session-mining-report.json`
+- Visual evidence: `<run-state>/visual-evidence/*.{png,jpg,jpeg,webp,gif,svg}`
+- Benchmarks: `<run-state>/benchmarks.json`
+- Operation telemetry and idempotency: `<run-state>/operation-receipts.json`; require `local-configured-capability` for locally authorized routine actions and `none-local-telemetry-only` for protected-action mirrors, which are never execution authority
+- Remote build/job cost evidence: `<run-state>/remote-jobs.json`

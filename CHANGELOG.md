@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Isolate run-control evidence behind an explicit issue/run `--pipeline-dir`, bind that namespace into candidate identity, and fail closed before foreign or legacy state can be overwritten.
 - Bind checkpoints, evaluator evidence, baselines, and outcome claims to immutable candidates; fail closed on stale identity or trust-policy drift.
 - Add single-writer run locking, typed failure routing, path-ownership checks, least-privilege capabilities, protected-operation approvals, and idempotent operation receipts.
 - Add provider-neutral T1/T2 release adapters with typed immutable dependencies and per-candidate remote-job budgets/telemetry that distinguish build execution from artifact reuse; repository-supplied preflights and protected actions remain outside the local runner's authority.

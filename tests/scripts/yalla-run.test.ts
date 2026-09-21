@@ -1,10 +1,40 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { runYallaRun } from '../../scripts/yalla-run.js'
+import { runYallaRun as runYallaRunRaw } from '../../scripts/yalla-run.js'
+
+const defaultIssueId = 'issue-47'
+const defaultRunId = 'run-47'
+const defaultPipelineDir = `.pipeline/runs/${defaultIssueId}/${defaultRunId}`
+
+function statePath(root: string, name: string) {
+  return join(root, defaultPipelineDir, name)
+}
+
+function stateRef(name: string) {
+  return `${defaultPipelineDir}/${name}`
+}
+
+function runGoalProcess(root: string, pipelineDir: string, issueId: string, runId: string) {
+  const runner = join(process.cwd(), 'node_modules/.bin/tsx')
+  const script = join(process.cwd(), 'scripts/yalla-run.ts')
+  return new Promise<{ code: number | null; output: string }>((resolvePromise, reject) => {
+    const child = spawn(runner, [script, 'goal', '--pipeline-dir', pipelineDir, '--issue-id', issueId, '--run-id', runId, '--message', issueId], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })
+    let output = ''
+    child.stdout.on('data', chunk => { output += String(chunk) })
+    child.stderr.on('data', chunk => { output += String(chunk) })
+    child.on('error', reject)
+    child.on('close', code => resolvePromise({ code, output }))
+  })
+}
+
+async function runYallaRun(options: Parameters<typeof runYallaRunRaw>[0]) {
+  if (options.command === 'preflight') return runYallaRunRaw(options)
+  return runYallaRunRaw({ ...options, pipelineDir: options.pipelineDir ?? defaultPipelineDir, issueId: options.issueId ?? defaultIssueId, runId: options.runId ?? defaultRunId })
+}
 
 function tempRoot() {
   return mkdtempSync(join(tmpdir(), 'yalla-run-'))
@@ -13,6 +43,23 @@ function tempRoot() {
 function writeConfig(root: string, extra = '') {
   mkdirSync(join(root, '.claude'), { recursive: true })
   mkdirSync(join(root, 'tests'))
+  mkdirSync(join(root, defaultPipelineDir), { recursive: true })
+  writeFileSync(statePath(root, 'goal-contract.json'), JSON.stringify({
+    schema_version: 2,
+    yalla_version: '1.4.1',
+    version: 1,
+    created_at: '2026-06-14T09:00:00.000Z',
+    issue_id: defaultIssueId,
+    run_id: defaultRunId,
+    pipeline_dir: defaultPipelineDir,
+    desired_end_state: 'Test fixture goal',
+    success_criteria: ['test passes'],
+    constraints: [],
+    budget: { max_iterations: 2, max_runtime_minutes: 30, token_budget: 'repo-defined' },
+    forbidden_shortcuts: [],
+    required_evidence: [],
+    verifier_registry: {},
+  }))
   writeFileSync(
     join(root, '.claude/YALLA.md'),
     `repo: "owner/repo"
@@ -28,7 +75,7 @@ models:
   review: "opus"
 verifiers:
   api: "npm test"
-  visual: ".pipeline/visual-evidence/"
+  visual: "${defaultPipelineDir}/visual-evidence/"
 ${extra}autopilot:
   max_iterations: 2
   max_runtime_minutes: 30
@@ -81,7 +128,7 @@ const nAEvidenceGates = {
 }
 
 async function writeAndStampClassification(root: string, issueId = 'issue-47', requiredGates = ['candidate-integrity-check']) {
-  writeFileSync(join(root, '.pipeline/classification.json'), JSON.stringify({
+  writeFileSync(statePath(root, 'classification.json'), JSON.stringify({
     issue_id: issueId,
     required_gates: requiredGates,
     external_grounding_gate: 'n/a',
@@ -90,17 +137,138 @@ async function writeAndStampClassification(root: string, issueId = 'issue-47', r
     runtime_e2e_gate_reason: 'No runtime environment claim.',
     evidence_gate_requirements: nAGateRequirements,
   }))
-  return runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/classification.json' })
+  return runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('classification.json') })
 }
 
 describe('scripts/yalla-run.ts', () => {
-  it('appends structured events to .pipeline/events.jsonl', async () => {
+  it('requires stable goal identity before the first mutation', async () => {
+    const root = tempRoot()
+    writeConfig(root)
+    const before = readFileSync(statePath(root, 'goal-contract.json'), 'utf8')
+
+    const missingIdentity = await runYallaRunRaw({ command: 'goal', rootDir: root, message: 'Unsafe unbound goal' })
+
+    expect(missingIdentity).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('Stable issue and run IDs') })
+    expect(readFileSync(statePath(root, 'goal-contract.json'), 'utf8')).toBe(before)
+  })
+
+  it('preserves foreign root evidence and isolates issue/run namespaces', async () => {
+    const root = gitTempRoot()
+    const legacyGoalPath = statePath(root, 'goal-contract.json')
+    const legacyGoalBefore = readFileSync(legacyGoalPath, 'utf8')
+    const runA = '.pipeline/runs/issue-49/run-a'
+    const runB = '.pipeline/runs/issue-50/run-b'
+
+    const first = await runYallaRunRaw({ command: 'goal', rootDir: root, pipelineDir: runA, issueId: 'issue-49', runId: 'run-a', message: 'Isolated run A' })
+    const second = await runYallaRunRaw({ command: 'goal', rootDir: root, pipelineDir: runB, issueId: 'issue-50', runId: 'run-b', message: 'Isolated run B' })
+    const runAEvents = join(root, runA, 'events.jsonl')
+    const beforeRejectedEvents = readFileSync(runAEvents, 'utf8')
+    expect((await runYallaRunRaw({ command: 'event', rootDir: root, pipelineDir: runA, event: 'missing.identity' })).exitCode).toBe(1)
+    expect((await runYallaRunRaw({ command: 'event', rootDir: root, pipelineDir: runA, issueId: 'issue-50', runId: 'run-b', event: 'wrong.identity' })).exitCode).toBe(1)
+    expect(readFileSync(runAEvents, 'utf8')).toBe(beforeRejectedEvents)
+    await runYallaRunRaw({ command: 'event', rootDir: root, pipelineDir: runA, issueId: 'issue-49', runId: 'run-a', event: 'run-a.only', message: 'A' })
+    const statusA = await runYallaRunRaw({ command: 'status', rootDir: root, pipelineDir: runA, issueId: 'issue-49', runId: 'run-a' })
+    const statusB = await runYallaRunRaw({ command: 'status', rootDir: root, pipelineDir: runB, issueId: 'issue-50', runId: 'run-b' })
+
+    expect(first.exitCode).toBe(0)
+    expect(second.exitCode).toBe(0)
+    expect(readFileSync(legacyGoalPath, 'utf8')).toBe(legacyGoalBefore)
+    expect(statusA.status).toMatchObject({ pipeline_dir: runA, events: 2, goal_contract: true })
+    expect(statusB.status).toMatchObject({ pipeline_dir: runB, events: 1, goal_contract: true })
+    expect(existsSync(join(root, runA, 'events.jsonl'))).toBe(true)
+    expect(existsSync(join(root, runB, 'events.jsonl'))).toBe(true)
+  })
+
+  it('does not change tracked legacy root evidence when a namespaced run starts', async () => {
+    const root = gitTempRoot()
+    const legacyGoalPath = join(root, '.pipeline/goal-contract.json')
+    const legacyEventsPath = join(root, '.pipeline/events.jsonl')
+    const legacyGoal = `${JSON.stringify({ issue_id: 'issue-3514', desired_end_state: 'preserve tracked root evidence' }, null, 2)}\n`
+    const legacyEvents = `${JSON.stringify({ event: 'legacy.root', issue_id: 'issue-3514' })}\n`
+    writeFileSync(legacyGoalPath, legacyGoal)
+    writeFileSync(legacyEventsPath, legacyEvents)
+    execFileSync('git', ['add', '.pipeline/goal-contract.json', '.pipeline/events.jsonl'], { cwd: root })
+    execFileSync('git', ['commit', '-m', 'track legacy root evidence'], { cwd: root })
+
+    const namespace = '.pipeline/runs/issue-49/canary-1'
+    const result = await runYallaRunRaw({ command: 'goal', rootDir: root, pipelineDir: namespace, issueId: 'issue-49', runId: 'canary-1', message: 'Start isolated canary' })
+
+    expect(result.exitCode).toBe(0)
+    expect(readFileSync(legacyGoalPath, 'utf8')).toBe(legacyGoal)
+    expect(readFileSync(legacyEventsPath, 'utf8')).toBe(legacyEvents)
+    expect(execFileSync('git', ['diff', '--', '.pipeline/goal-contract.json', '.pipeline/events.jsonl'], { cwd: root, encoding: 'utf8' })).toBe('')
+    expect(JSON.parse(readFileSync(join(root, namespace, 'goal-contract.json'), 'utf8'))).toMatchObject({ issue_id: 'issue-49', run_id: 'canary-1', pipeline_dir: namespace })
+  })
+
+  it('fails closed before overwriting a namespace owned by another run', async () => {
+    const root = gitTempRoot()
+    const goalPath = statePath(root, 'goal-contract.json')
+    const before = readFileSync(goalPath, 'utf8')
+
+    const result = await runYallaRunRaw({ command: 'goal', rootDir: root, pipelineDir: defaultPipelineDir, issueId: 'issue-99', runId: 'run-99', message: 'Foreign overwrite' })
+
+    expect(result).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('IDENTITY_MISMATCH') })
+    expect(readFileSync(goalPath, 'utf8')).toBe(before)
+  })
+
+  it('serializes concurrent namespace claims before validating ownership', async () => {
+    const root = gitTempRoot()
+    const namespace = '.pipeline/runs/issue-race/attempt-1'
+
+    const results = await Promise.all([
+      runGoalProcess(root, namespace, 'issue-race', 'attempt-1'),
+      runGoalProcess(root, namespace, 'issue-race', 'attempt-1'),
+    ])
+
+    const successes = results.filter(result => result.code === 0)
+    expect(successes.length).toBeGreaterThanOrEqual(1)
+    expect(results.every(result => result.code === 0 || result.output.includes('run lock is already held'))).toBe(true)
+    const goal = JSON.parse(readFileSync(join(root, namespace, 'goal-contract.json'), 'utf8')) as { issue_id: string; run_id: string; pipeline_dir: string }
+    expect(goal).toMatchObject({ issue_id: 'issue-race', run_id: 'attempt-1', pipeline_dir: namespace })
+    expect(readFileSync(join(root, namespace, 'events.jsonl'), 'utf8').trim().split('\n')).toHaveLength(successes.length)
+  })
+
+  it('keeps legacy root evidence read-only until it is explicitly migrated', async () => {
+    const root = gitTempRoot()
+    const legacyState = '.pipeline/runs/issue-49/run-a'
+    const goalPath = join(root, legacyState, 'goal-contract.json')
+    const legacy = JSON.stringify({ version: 1, desired_end_state: 'historical unbound run' })
+    mkdirSync(join(root, legacyState), { recursive: true })
+    writeFileSync(goalPath, legacy)
+
+    const result = await runYallaRunRaw({ command: 'goal', rootDir: root, pipelineDir: legacyState, issueId: 'issue-49', runId: 'run-a', message: 'Do not overwrite legacy evidence' })
+
+    expect(result).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('legacy or unbound state') })
+    expect(readFileSync(goalPath, 'utf8')).toBe(legacy)
+  })
+
+  it('recovers from an interrupted atomic-write temp file without consuming or altering it', async () => {
+    const root = gitTempRoot()
+    const namespace = '.pipeline/runs/issue-interrupted/attempt-1'
+    const interruptedPath = join(root, namespace, 'goal-contract.json.123.interrupted.tmp')
+    mkdirSync(join(root, namespace), { recursive: true })
+    writeFileSync(interruptedPath, '{"partial":')
+
+    const result = await runYallaRunRaw({ command: 'goal', rootDir: root, pipelineDir: namespace, issueId: 'issue-interrupted', runId: 'attempt-1', message: 'Recover with an atomic target write' })
+
+    expect(result.exitCode).toBe(0)
+    expect(readFileSync(interruptedPath, 'utf8')).toBe('{"partial":')
+    expect(JSON.parse(readFileSync(join(root, namespace, 'goal-contract.json'), 'utf8'))).toMatchObject({ issue_id: 'issue-interrupted', run_id: 'attempt-1', pipeline_dir: namespace })
+  })
+
+  it('rejects pipeline directory traversal before reading or writing state', async () => {
+    const root = gitTempRoot()
+    const result = await runYallaRunRaw({ command: 'status', rootDir: root, pipelineDir: '../outside', issueId: 'issue-47', runId: 'run-47' })
+    expect(result).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('stay inside the repository') })
+  })
+
+  it('appends structured events only to the selected run namespace', async () => {
     const root = tempRoot()
     writeConfig(root)
     const result = await runYallaRun({ command: 'event', rootDir: root, event: 'stage.started', phase: 'plan', message: 'Planning started', now: () => '2026-06-14T10:00:00.000Z' })
 
     expect(result.exitCode).toBe(0)
-    expect(result.eventPath).toBe(join(root, '.pipeline/events.jsonl'))
+    expect(result.eventPath).toBe(join(realpathSync(root), defaultPipelineDir, 'events.jsonl'))
     const lines = readFileSync(result.eventPath ?? '', 'utf8').trim().split('\n')
     expect(lines).toHaveLength(1)
     expect(JSON.parse(lines[0])).toMatchObject({ ts: '2026-06-14T10:00:00.000Z', event: 'stage.started', phase: 'plan', properties: { message: 'Planning started' } })
@@ -120,16 +288,16 @@ describe('scripts/yalla-run.ts', () => {
 
   it('generates a local HTML run report', async () => {
     const root = gitTempRoot()
-    mkdirSync(join(root, '.pipeline/visual-evidence'), { recursive: true })
-    writeFileSync(join(root, '.pipeline/visual-evidence/after.svg'), '<svg></svg>')
-    writeFileSync(join(root, '.pipeline/benchmarks.json'), JSON.stringify({ p95_ms: 120 }))
+    mkdirSync(statePath(root, 'visual-evidence'), { recursive: true })
+    writeFileSync(statePath(root, 'visual-evidence/after.svg'), '<svg></svg>')
+    writeFileSync(statePath(root, 'benchmarks.json'), JSON.stringify({ p95_ms: 120 }))
     await runYallaRun({ command: 'event', rootDir: root, event: 'review.completed', phase: 'review', message: 'Review passed' })
     await runYallaRun({ command: 'goal', rootDir: root, message: 'Ship a verified healthcheck', criteria: ['returns ok'], evidence: ['npm test'] })
     await runYallaRun({ command: 'candidate', rootDir: root, issueId: 'issue-47' })
     await runYallaRun({ command: 'evaluate', rootDir: root, evaluator: 'reviewer', verdict: 'PASS', message: 'Evidence is sufficient' })
     const result = await runYallaRun({ command: 'report', rootDir: root })
 
-    expect(result.reportPath).toBe(join(root, '.pipeline/report.html'))
+    expect(result.reportPath).toBe(join(realpathSync(root), defaultPipelineDir, 'report.html'))
     const html = readFileSync(result.reportPath ?? '', 'utf8')
     expect(html).toContain('Yalla Run Report')
     expect(html).toContain('Pipeline Graph')
@@ -218,10 +386,10 @@ describe('scripts/yalla-run.ts', () => {
     const evaluation = await runYallaRun({ command: 'evaluate', rootDir: root, evaluator: 'test-reviewer', verdict: 'FAIL', failureClass: 'CANDIDATE_FAILURE', finding: ['missing negative path'], message: 'Add a negative test' })
     const loop = await runYallaRun({ command: 'loop', rootDir: root })
 
-    expect(goal.goalPath).toBe(join(root, '.pipeline/goal-contract.json'))
+    expect(goal.goalPath).toBe(join(realpathSync(root), defaultPipelineDir, 'goal-contract.json'))
     expect(evaluation.exitCode).toBe(1)
-    expect(evaluation.evaluatorPath).toBe(join(root, '.pipeline/evaluator-results.json'))
-    expect(loop.loopPath).toBe(join(root, '.pipeline/loop-state.json'))
+    expect(evaluation.evaluatorPath).toBe(join(realpathSync(root), defaultPipelineDir, 'evaluator-results.json'))
+    expect(loop.loopPath).toBe(join(realpathSync(root), defaultPipelineDir, 'loop-state.json'))
     expect(loop.status).toMatchObject({ decision: 'continue', next_instruction: 'Add a negative test' })
   })
 
@@ -237,14 +405,17 @@ describe('scripts/yalla-run.ts', () => {
     const root = tempRoot()
     writeConfig(root)
     mkdirSync(join(root, '.pipeline'), { recursive: true })
-    writeFileSync(join(root, '.pipeline/outcome-evaluation.json'), JSON.stringify({ verdict: 'PROVEN' }))
+    writeFileSync(statePath(root, 'outcome-evaluation.json'), JSON.stringify({ verdict: 'PROVEN' }))
 
     const status = await runYallaRun({ command: 'status', rootDir: root })
     const evaluation = await runYallaRun({ command: 'evaluate', rootDir: root, evaluator: 'reviewer', verdict: 'PASS' })
     const loop = await runYallaRun({ command: 'loop', rootDir: root })
 
     expect(status.status).toMatchObject({ candidate_state: 'UNBOUND', verdict: 'UNKNOWN' })
-    expect(evaluation).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('No active candidate') })
+    expect(evaluation).toMatchObject({
+      exitCode: 1,
+      instruction: `No active candidate. Run \`npm run yalla:run -- candidate --pipeline-dir ${defaultPipelineDir} --issue-id ${defaultIssueId} --run-id ${defaultRunId}\` first.`,
+    })
     expect(loop.status).toMatchObject({ decision: 'stop-identity' })
   })
 
@@ -252,12 +423,12 @@ describe('scripts/yalla-run.ts', () => {
     const root = tempRoot()
     writeConfig(root)
     mkdirSync(join(root, '.pipeline'), { recursive: true })
-    writeFileSync(join(root, '.pipeline/test-evidence.json'), JSON.stringify({ commands: [{ command: 'npm test', status: 'fail' }] }))
-    writeFileSync(join(root, '.pipeline/review-results.json'), JSON.stringify({ checks: [{ name: 'coverage', verdict: 'FAIL' }] }))
+    writeFileSync(statePath(root, 'test-evidence.json'), JSON.stringify({ commands: [{ command: 'npm test', status: 'fail' }] }))
+    writeFileSync(statePath(root, 'review-results.json'), JSON.stringify({ checks: [{ name: 'coverage', verdict: 'FAIL' }] }))
     await runYallaRun({ command: 'event', rootDir: root, event: 'run.inconclusive', phase: 'test', message: 'blocked by missing fixture' })
     const result = await runYallaRun({ command: 'mine-sessions', rootDir: root })
 
-    expect(result.miningPath).toBe(join(root, '.pipeline/session-mining-report.json'))
+    expect(result.miningPath).toBe(join(realpathSync(root), defaultPipelineDir, 'session-mining-report.json'))
     expect(result.status?.suggested_updates).toEqual(expect.arrayContaining([expect.objectContaining({ target: '.claude/YALLA.md gotchas' }), expect.objectContaining({ target: 'knowledge/yalla/PROJECT-CHECKS.md' }), expect.objectContaining({ target: 'eval/yalla/data' })]))
   })
 
@@ -352,19 +523,21 @@ describe('scripts/yalla-run.ts', () => {
 
     const denied = await runYallaRun({ command: 'operation', rootDir: root, operationId: 'merge-47', capability: 'merge_pr', action: 'merge', target: 'pr-47' })
     expect(denied).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('cannot be authorized by the local Yalla runner') })
-    expect(existsSync(join(root, '.pipeline/operation-receipts.json'))).toBe(false)
+    expect(existsSync(statePath(root, 'operation-receipts.json'))).toBe(false)
   })
 
   it('can close an externally reserved protected receipt after candidate drift', async () => {
     const root = gitTempRoot()
     await runYallaRun({ command: 'goal', rootDir: root, message: 'Close external receipt', criteria: ['terminal telemetry'] })
     await runYallaRun({ command: 'candidate', rootDir: root, issueId: 'issue-47' })
-    const candidate = JSON.parse(readFileSync(join(root, '.pipeline/candidate.json'), 'utf8'))
-    writeFileSync(join(root, '.pipeline/operation-receipts.json'), JSON.stringify({
-      schema_version: 1,
+    const candidate = JSON.parse(readFileSync(statePath(root, 'candidate.json'), 'utf8'))
+    writeFileSync(statePath(root, 'operation-receipts.json'), JSON.stringify({
+      schema_version: 2,
+      pipeline_dir: defaultPipelineDir,
       receipts: [{
         operation_id: 'merge-external-47', capability: 'merge_pr', action: 'merge', target: 'pr-47', status: 'pending',
         candidate_id: candidate.candidate_id, candidate_sha: candidate.head_sha, approval_reference: 'external://approval/47',
+        pipeline_dir: defaultPipelineDir,
         execution_authority: 'none-local-telemetry-only', recorded_at: '2026-09-20T12:00:00.000Z',
       }],
     }))
@@ -380,10 +553,10 @@ describe('scripts/yalla-run.ts', () => {
     const root = gitTempRoot()
     await runYallaRun({ command: 'goal', rootDir: root, message: 'Reject ambiguous protected telemetry', criteria: ['authority marker required'] })
     await runYallaRun({ command: 'candidate', rootDir: root, issueId: 'issue-47' })
-    const candidate = JSON.parse(readFileSync(join(root, '.pipeline/candidate.json'), 'utf8'))
-    writeFileSync(join(root, '.pipeline/operation-receipts.json'), JSON.stringify({ receipts: [{
+    const candidate = JSON.parse(readFileSync(statePath(root, 'candidate.json'), 'utf8'))
+    writeFileSync(statePath(root, 'operation-receipts.json'), JSON.stringify({ pipeline_dir: defaultPipelineDir, receipts: [{
       operation_id: 'merge-ambiguous-47', capability: 'merge_pr', action: 'merge', target: 'pr-47', status: 'pending',
-      candidate_id: candidate.candidate_id, candidate_sha: candidate.head_sha, recorded_at: '2026-09-20T12:00:00.000Z',
+      candidate_id: candidate.candidate_id, candidate_sha: candidate.head_sha, pipeline_dir: defaultPipelineDir, recorded_at: '2026-09-20T12:00:00.000Z',
     }] }))
 
     const denied = await runYallaRun({ command: 'operation', rootDir: root, operationId: 'merge-ambiguous-47', capability: 'merge_pr', action: 'merge', target: 'pr-47', operationStatus: 'succeeded' })
@@ -396,7 +569,7 @@ describe('scripts/yalla-run.ts', () => {
     await runYallaRun({ command: 'candidate', rootDir: root, issueId: 'issue-47' })
     const result = await runYallaRun({ command: 'operation', rootDir: root, operationId: 'open-47', capability: 'open_pr', action: 'open', target: 'issue-47', operationStatus: 'sucessed' })
     expect(result).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('Invalid --operation-status sucessed') })
-    expect(existsSync(join(root, '.pipeline/operation-receipts.json'))).toBe(false)
+    expect(existsSync(statePath(root, 'operation-receipts.json'))).toBe(false)
   })
 
   it('refuses repository-supplied preflight execution and self-stamping', async () => {
@@ -404,8 +577,8 @@ describe('scripts/yalla-run.ts', () => {
     writeReleaseAdapter(root)
     await runYallaRun({ command: 'goal', rootDir: root, message: 'Execute immutable preflight', criteria: ['identity observed'] })
     await runYallaRun({ command: 'candidate', rootDir: root, issueId: 'issue-47' })
-    writeFileSync(join(root, '.pipeline/release-preflight.json'), JSON.stringify({ status: 'pass' }))
-    expect(await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/release-preflight.json' })).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('external-controller evidence') })
+    writeFileSync(statePath(root, 'release-preflight.json'), JSON.stringify({ status: 'pass' }))
+    expect(await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('release-preflight.json') })).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('external-controller evidence') })
     let executed = false
     const blocked = await runYallaRun({
       command: 'preflight',
@@ -425,18 +598,18 @@ describe('scripts/yalla-run.ts', () => {
     await runYallaRun({ command: 'candidate', rootDir: root, issueId: 'issue-47' })
     await runYallaRun({ command: 'baseline', rootDir: root })
     expect((await writeAndStampClassification(root)).exitCode).toBe(0)
-    writeFileSync(join(root, '.pipeline/acceptance-trace.json'), JSON.stringify({ issue_id: 'issue-47', criteria: [{ criterion: 'Outcome is current', proof_mode: 'new-test', status: 'covered', evidence: 'tests/scripts/yalla-run.test.ts' }] }))
-    expect((await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/acceptance-trace.json' })).exitCode).toBe(0)
-    writeFileSync(join(root, '.pipeline/test-evidence.json'), JSON.stringify({ issue_id: 'issue-47', commands: [{ command: 'npm test', status: 'pass', summary: 'passed' }] }))
-    expect((await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/test-evidence.json' })).exitCode).toBe(0)
-    writeFileSync(join(root, '.pipeline/review-results.json'), JSON.stringify({ issue_id: 'issue-47', required_checks: ['candidate-integrity-check'], checks: [{ name: 'candidate-integrity-check', verdict: 'pass' }], evidence_gates: nAEvidenceGates }))
-    expect((await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/review-results.json' })).exitCode).toBe(0)
-    writeFileSync(join(root, '.pipeline/outcome-evaluation.json'), JSON.stringify({ issue_id: 'issue-47', verdict: 'PROVEN', criteria_summary: [{ criterion: 'Outcome is current', status: 'covered', evidence: 'tests/scripts/yalla-run.test.ts' }], remaining_delta: [], human_decisions_needed: [] }))
+    writeFileSync(statePath(root, 'acceptance-trace.json'), JSON.stringify({ issue_id: 'issue-47', criteria: [{ criterion: 'Outcome is current', proof_mode: 'new-test', status: 'covered', evidence: 'tests/scripts/yalla-run.test.ts' }] }))
+    expect((await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('acceptance-trace.json') })).exitCode).toBe(0)
+    writeFileSync(statePath(root, 'test-evidence.json'), JSON.stringify({ issue_id: 'issue-47', commands: [{ command: 'npm test', status: 'pass', summary: 'passed' }] }))
+    expect((await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('test-evidence.json') })).exitCode).toBe(0)
+    writeFileSync(statePath(root, 'review-results.json'), JSON.stringify({ issue_id: 'issue-47', required_checks: ['candidate-integrity-check'], checks: [{ name: 'candidate-integrity-check', verdict: 'pass' }], evidence_gates: nAEvidenceGates }))
+    expect((await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('review-results.json') })).exitCode).toBe(0)
+    writeFileSync(statePath(root, 'outcome-evaluation.json'), JSON.stringify({ issue_id: 'issue-47', verdict: 'PROVEN', criteria_summary: [{ criterion: 'Outcome is current', status: 'covered', evidence: 'tests/scripts/yalla-run.test.ts' }], remaining_delta: [], human_decisions_needed: [] }))
 
     expect((await runYallaRun({ command: 'status', rootDir: root })).status?.verdict).toBe('UNKNOWN')
-    expect((await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/outcome-evaluation.json' })).exitCode).toBe(0)
+    expect((await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('outcome-evaluation.json') })).exitCode).toBe(0)
     expect((await runYallaRun({ command: 'status', rootDir: root })).status?.verdict).toBe('PROVEN')
-    writeFileSync(join(root, '.pipeline/test-evidence.json'), JSON.stringify({ issue_id: 'issue-47', commands: [{ command: 'npm test', status: 'pass', summary: 'changed after proof' }] }))
+    writeFileSync(statePath(root, 'test-evidence.json'), JSON.stringify({ issue_id: 'issue-47', commands: [{ command: 'npm test', status: 'pass', summary: 'changed after proof' }] }))
     expect((await runYallaRun({ command: 'status', rootDir: root })).status?.verdict).toBe('UNKNOWN')
   })
 
@@ -444,20 +617,20 @@ describe('scripts/yalla-run.ts', () => {
     const root = gitTempRoot()
     await runYallaRun({ command: 'goal', rootDir: root, message: 'Reject false proof', criteria: ['evidence exists'] })
     await runYallaRun({ command: 'candidate', rootDir: root, issueId: 'issue-47' })
-    writeFileSync(join(root, '.pipeline/outcome-evaluation.json'), JSON.stringify({ issue_id: 'issue-47', verdict: 'PROVEN' }))
-    const bareStamp = await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/outcome-evaluation.json' })
+    writeFileSync(statePath(root, 'outcome-evaluation.json'), JSON.stringify({ issue_id: 'issue-47', verdict: 'PROVEN' }))
+    const bareStamp = await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('outcome-evaluation.json') })
     expect(bareStamp).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('required inputs are missing') })
 
     await runYallaRun({ command: 'baseline', rootDir: root })
     expect((await writeAndStampClassification(root)).exitCode).toBe(0)
-    writeFileSync(join(root, '.pipeline/acceptance-trace.json'), JSON.stringify({ issue_id: 'issue-47', criteria: [{ criterion: 'Evidence exists', proof_mode: 'new-test', status: 'covered', evidence: 'test' }] }))
-    await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/acceptance-trace.json' })
-    writeFileSync(join(root, '.pipeline/test-evidence.json'), JSON.stringify({ issue_id: 'issue-47', commands: [{ command: 'npm test', status: 'pass', summary: 'pass' }] }))
-    await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/test-evidence.json' })
-    writeFileSync(join(root, '.pipeline/review-results.json'), JSON.stringify({ issue_id: 'issue-47', required_checks: ['candidate-integrity-check'], checks: [{ name: 'candidate-integrity-check', verdict: 'pass' }], evidence_gates: nAEvidenceGates }))
-    await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/review-results.json' })
-    writeFileSync(join(root, '.pipeline/outcome-evaluation.json'), JSON.stringify({ issue_id: 'issue-47', verdict: 'PROVEN', criteria_summary: [{ criterion: 'Evidence exists', status: 'covered', evidence: 'test' }], remaining_delta: [], human_decisions_needed: [] }))
-    await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/outcome-evaluation.json' })
+    writeFileSync(statePath(root, 'acceptance-trace.json'), JSON.stringify({ issue_id: 'issue-47', criteria: [{ criterion: 'Evidence exists', proof_mode: 'new-test', status: 'covered', evidence: 'test' }] }))
+    await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('acceptance-trace.json') })
+    writeFileSync(statePath(root, 'test-evidence.json'), JSON.stringify({ issue_id: 'issue-47', commands: [{ command: 'npm test', status: 'pass', summary: 'pass' }] }))
+    await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('test-evidence.json') })
+    writeFileSync(statePath(root, 'review-results.json'), JSON.stringify({ issue_id: 'issue-47', required_checks: ['candidate-integrity-check'], checks: [{ name: 'candidate-integrity-check', verdict: 'pass' }], evidence_gates: nAEvidenceGates }))
+    await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('review-results.json') })
+    writeFileSync(statePath(root, 'outcome-evaluation.json'), JSON.stringify({ issue_id: 'issue-47', verdict: 'PROVEN', criteria_summary: [{ criterion: 'Evidence exists', status: 'covered', evidence: 'test' }], remaining_delta: [], human_decisions_needed: [] }))
+    await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('outcome-evaluation.json') })
     expect((await runYallaRun({ command: 'status', rootDir: root })).status?.verdict).toBe('PROVEN')
 
     writeFileSync(join(root, 'app.ts'), 'export const value = 99\n')
@@ -472,31 +645,31 @@ describe('scripts/yalla-run.ts', () => {
     await runYallaRun({ command: 'candidate', rootDir: root, issueId: 'issue-47' })
     await runYallaRun({ command: 'baseline', rootDir: root })
     expect((await writeAndStampClassification(root, 'issue-47', ['security-check'])).exitCode).toBe(0)
-    writeFileSync(join(root, '.pipeline/acceptance-trace.json'), JSON.stringify({ issue_id: 'issue-47', criteria: [{ criterion: 'invented unrelated behavior', proof_mode: 'new-test', status: 'covered', evidence: 'test' }] }))
-    await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/acceptance-trace.json' })
-    writeFileSync(join(root, '.pipeline/test-evidence.json'), JSON.stringify({ issue_id: 'issue-47', commands: [{ command: 'npm run typecheck', status: 'pass', summary: 'pass' }] }))
-    await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/test-evidence.json' })
-    writeFileSync(join(root, '.pipeline/review-results.json'), JSON.stringify({ issue_id: 'issue-47', required_checks: ['candidate-integrity-check'], checks: [{ name: 'candidate-integrity-check', verdict: 'pass' }], evidence_gates: nAEvidenceGates }))
-    await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/review-results.json' })
-    writeFileSync(join(root, '.pipeline/outcome-evaluation.json'), JSON.stringify({ issue_id: 'issue-47', verdict: 'PROVEN', criteria_summary: [{ criterion: 'invented unrelated behavior', status: 'covered', evidence: 'test' }], remaining_delta: [], human_decisions_needed: [] }))
+    writeFileSync(statePath(root, 'acceptance-trace.json'), JSON.stringify({ issue_id: 'issue-47', criteria: [{ criterion: 'invented unrelated behavior', proof_mode: 'new-test', status: 'covered', evidence: 'test' }] }))
+    await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('acceptance-trace.json') })
+    writeFileSync(statePath(root, 'test-evidence.json'), JSON.stringify({ issue_id: 'issue-47', commands: [{ command: 'npm run typecheck', status: 'pass', summary: 'pass' }] }))
+    await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('test-evidence.json') })
+    writeFileSync(statePath(root, 'review-results.json'), JSON.stringify({ issue_id: 'issue-47', required_checks: ['candidate-integrity-check'], checks: [{ name: 'candidate-integrity-check', verdict: 'pass' }], evidence_gates: nAEvidenceGates }))
+    await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('review-results.json') })
+    writeFileSync(statePath(root, 'outcome-evaluation.json'), JSON.stringify({ issue_id: 'issue-47', verdict: 'PROVEN', criteria_summary: [{ criterion: 'invented unrelated behavior', status: 'covered', evidence: 'test' }], remaining_delta: [], human_decisions_needed: [] }))
 
-    const result = await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/outcome-evaluation.json' })
+    const result = await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('outcome-evaluation.json') })
     expect(result).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('exact goal-contract success criteria') })
 
-    writeFileSync(join(root, '.pipeline/acceptance-trace.json'), JSON.stringify({ issue_id: 'issue-47', criteria: [{ criterion: 'requested behavior works', proof_mode: 'new-test', status: 'covered', evidence: 'test' }] }))
-    await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/acceptance-trace.json' })
-    writeFileSync(join(root, '.pipeline/test-evidence.json'), JSON.stringify({ issue_id: 'issue-47', commands: [{ command: 'npm run typecheck', status: 'pass', summary: 'pass' }] }))
-    await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/test-evidence.json' })
-    writeFileSync(join(root, '.pipeline/review-results.json'), JSON.stringify({ issue_id: 'issue-47', required_checks: ['candidate-integrity-check'], checks: [{ name: 'candidate-integrity-check', verdict: 'pass' }], evidence_gates: nAEvidenceGates }))
-    await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/review-results.json' })
-    writeFileSync(join(root, '.pipeline/outcome-evaluation.json'), JSON.stringify({ issue_id: 'issue-47', verdict: 'PROVEN', criteria_summary: [{ criterion: 'requested behavior works', status: 'covered', evidence: 'test' }], remaining_delta: [], human_decisions_needed: [] }))
-    expect(await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/outcome-evaluation.json' })).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('required evidence command') })
+    writeFileSync(statePath(root, 'acceptance-trace.json'), JSON.stringify({ issue_id: 'issue-47', criteria: [{ criterion: 'requested behavior works', proof_mode: 'new-test', status: 'covered', evidence: 'test' }] }))
+    await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('acceptance-trace.json') })
+    writeFileSync(statePath(root, 'test-evidence.json'), JSON.stringify({ issue_id: 'issue-47', commands: [{ command: 'npm run typecheck', status: 'pass', summary: 'pass' }] }))
+    await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('test-evidence.json') })
+    writeFileSync(statePath(root, 'review-results.json'), JSON.stringify({ issue_id: 'issue-47', required_checks: ['candidate-integrity-check'], checks: [{ name: 'candidate-integrity-check', verdict: 'pass' }], evidence_gates: nAEvidenceGates }))
+    await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('review-results.json') })
+    writeFileSync(statePath(root, 'outcome-evaluation.json'), JSON.stringify({ issue_id: 'issue-47', verdict: 'PROVEN', criteria_summary: [{ criterion: 'requested behavior works', status: 'covered', evidence: 'test' }], remaining_delta: [], human_decisions_needed: [] }))
+    expect(await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('outcome-evaluation.json') })).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('required evidence command') })
 
-    writeFileSync(join(root, '.pipeline/test-evidence.json'), JSON.stringify({ issue_id: 'issue-47', commands: [{ command: 'npm test', status: 'pass', summary: 'pass' }] }))
-    await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/test-evidence.json' })
-    writeFileSync(join(root, '.pipeline/review-results.json'), JSON.stringify({ issue_id: 'issue-47', required_checks: ['candidate-integrity-check'], checks: [{ name: 'candidate-integrity-check', verdict: 'pass' }], evidence_gates: nAEvidenceGates }))
-    await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/review-results.json' })
-    expect(await runYallaRun({ command: 'stamp', rootDir: root, target: '.pipeline/outcome-evaluation.json' })).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('retain every classification required_gate') })
+    writeFileSync(statePath(root, 'test-evidence.json'), JSON.stringify({ issue_id: 'issue-47', commands: [{ command: 'npm test', status: 'pass', summary: 'pass' }] }))
+    await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('test-evidence.json') })
+    writeFileSync(statePath(root, 'review-results.json'), JSON.stringify({ issue_id: 'issue-47', required_checks: ['candidate-integrity-check'], checks: [{ name: 'candidate-integrity-check', verdict: 'pass' }], evidence_gates: nAEvidenceGates }))
+    await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('review-results.json') })
+    expect(await runYallaRun({ command: 'stamp', rootDir: root, target: stateRef('outcome-evaluation.json') })).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('retain every classification required_gate') })
   })
 
   it('rejects negative remote-job duration and cost', async () => {
@@ -529,7 +702,7 @@ describe('scripts/yalla-run.ts', () => {
     const root = gitTempRoot()
     await runYallaRun({ command: 'goal', rootDir: root, message: 'Avoid parallel collisions', criteria: ['no path overlap'] })
     await runYallaRun({ command: 'candidate', rootDir: root, issueId: 'issue-47' })
-    writeFileSync(join(root, '.pipeline/path-ownership.json'), JSON.stringify({ claims: [
+    writeFileSync(statePath(root, 'path-ownership.json'), JSON.stringify({ claims: [
       { owner: 'implementer-a', paths: ['src/api'], changed_paths: [] },
       { owner: 'implementer-b', paths: ['src/api/checkout.ts'], changed_paths: [] },
     ] }))
@@ -544,7 +717,7 @@ describe('scripts/yalla-run.ts', () => {
     writeFileSync(join(root, 'app.ts'), 'export const value = 2\n')
     await runYallaRun({ command: 'goal', rootDir: root, message: 'Own actual changes', criteria: ['all changes owned'] })
     await runYallaRun({ command: 'candidate', rootDir: root, issueId: 'issue-47' })
-    writeFileSync(join(root, '.pipeline/path-ownership.json'), JSON.stringify({ claims: [{ owner: 'tester', paths: ['tests'] }] }))
+    writeFileSync(statePath(root, 'path-ownership.json'), JSON.stringify({ claims: [{ owner: 'tester', paths: ['tests'] }] }))
 
     const result = await runYallaRun({ command: 'ownership', rootDir: root })
     expect(result.exitCode).toBe(1)
@@ -560,7 +733,7 @@ describe('scripts/yalla-run.ts', () => {
     const blocked = await runYallaRun({ command: 'remote-job', rootDir: root, operationId: 'full-2', jobKind: 'full-suite', jobStatus: 'reserve', artifactAction: 'built' })
     expect(blocked.exitCode).toBe(1)
     expect(blocked.instruction).toContain('POLICY_BLOCKED: full-suite budget exhausted')
-    const telemetry = JSON.parse(readFileSync(join(root, '.pipeline/remote-jobs.json'), 'utf8'))
+    const telemetry = JSON.parse(readFileSync(statePath(root, 'remote-jobs.json'), 'utf8'))
     expect(telemetry.jobs).toEqual(expect.arrayContaining([expect.objectContaining({ operation_id: 'full-2', status: 'blocked' })]))
     expect(telemetry.summary.blocked).toBe(1)
   })

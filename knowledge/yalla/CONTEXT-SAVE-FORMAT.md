@@ -1,9 +1,9 @@
 # Context Saving Protocol
 
-Context saving keeps `/yalla` resumable after compaction, handoff, or a cold worktree restart. The primary durable state is `.pipeline-state.json` plus `.pipeline/*` artifacts, anchored to a unit of work identified as `issue-###`.
+Context saving keeps `/yalla` resumable after compaction, handoff, or a cold worktree restart. The primary durable state is `.pipeline-state.json` plus one canonical `.pipeline/runs/<issue-id>/<run-id>/` artifact namespace.
 
 Saved context is not resumable merely because files exist. Run
-`npm run yalla:run -- resume` and continue automatically only when the active
+`npm run yalla:run -- resume --pipeline-dir <run-state> --issue-id <issue-id> --run-id <run-id>` and continue automatically only when the active
 candidate and latest checkpoint are `RESUMABLE_EXACT`. Other states require
 revalidation, a new candidate, or a stop; never reset Git automatically.
 
@@ -48,7 +48,7 @@ Write `.pipeline-state.json` before each phase transition. This is the primary p
 ## Durable Handoff Locations
 
 - GitHub issue body/comment (github mode): Agent Brief, approved plan summary, phase PR list, current blocker.
-- `.pipeline/progress.md`: ephemeral handoff notes for active worktrees.
+- `<run-state>/progress.md`: ephemeral handoff notes for active worktrees.
 - PR body/comment: validation evidence, CI status, accepted risks, and review entry points.
 - Your project's conventions doc (`CLAUDE.md` / `AGENTS.md`), `.claude/YALLA.md`, or `docs/learnings/*`: durable rules only when the run exposed a reusable directive.
 
@@ -56,8 +56,8 @@ Write `.pipeline-state.json` before each phase transition. This is the primary p
 
 1. Read `.pipeline-state.json` for issue number, branch, phase, classification, and merge policy.
 2. Read `plans/active/issue-###-[slug].md` for the approved plan.
-3. Read the GitHub issue body/comments for Agent Brief, blockers, and PR links (github mode). In file-only mode, the plan file and `.pipeline/progress.md` hold this context.
-4. Read `.pipeline/progress.md`, `.pipeline/acceptance-trace.json`, `.pipeline/architecture-alignment.json`, `.pipeline/test-evidence.json`, and `.pipeline/review-results.json` when present.
+3. Read the GitHub issue body/comments for Agent Brief, blockers, and PR links (github mode). In file-only mode, the plan file and `<run-state>/progress.md` hold this context.
+4. Read `<run-state>/progress.md`, `<run-state>/acceptance-trace.json`, `<run-state>/architecture-alignment.json`, `<run-state>/test-evidence.json`, and `<run-state>/review-results.json` when present.
 5. Resume from the recorded phase.
 
 ## Cleanup

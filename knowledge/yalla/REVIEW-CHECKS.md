@@ -43,7 +43,7 @@ Universal checks stay small and run on most diffs. Risk-triggered checks run onl
 **Pass:** Every acceptance criterion is covered by behavior test evidence or accepted risk. Tests use the highest correct seam and mock only system boundaries.
 
 **Fail criteria:**
-- Acceptance criterion missing from `.pipeline/acceptance-trace.json` or PR evidence
+- Acceptance criterion missing from `<run-state>/acceptance-trace.json` or PR evidence
 - Criterion marked covered without a test command/evidence
 - Test mocks internal modules controlled by this repo instead of crossing the public interface
 - `TEST_SEAM_BLOCKED` is unresolved or missing behavior/reason/risk/architecture finding
@@ -73,7 +73,7 @@ and outcome evidence agree. Declared parallel path claims do not overlap.
 Run for external APIs, SDKs, providers, protocols, browser/platform behavior, or generated setup instructions.
 
 **Fail criteria:**
-- `.pipeline/external-grounding.json` or equivalent PR evidence is missing
+- `<run-state>/external-grounding.json` or equivalent PR evidence is missing
 - Source is stale, non-authoritative without justification, or does not support the claimed behavior
 - Code/tests do not reflect the documented consequence
 - `inconclusive` grounding is presented as `PROVEN`
@@ -158,7 +158,7 @@ Run for providers, tokens, access grants, entitlements, and money-adjacent objec
 
 > "When Product Intent applies, does the implementation match the documented intent, plan, architecture docs, and PR promises on the real code paths?"
 
-Run when `.pipeline/classification.json` has `product_intent_gate: "applies"`, when `.pipeline/product-intent.json` exists, or when the diff changes product/GTM/user-flow behavior, pricing/packaging, onboarding promises, access/delivery boundaries, metrics, or copy that makes a user-visible promise.
+Run when `<run-state>/classification.json` has `product_intent_gate: "applies"`, when `<run-state>/product-intent.json` exists, or when the diff changes product/GTM/user-flow behavior, pricing/packaging, onboarding promises, access/delivery boundaries, metrics, or copy that makes a user-visible promise.
 
 **Pass:** The plan/PR states intended outcome, target user/context, metric/proxy, and MVP boundary; acceptance criteria and evidence prove the intended behavior; money/access/data/privacy/delivery/trust/product-promise boundaries match the documented intent.
 
@@ -215,7 +215,7 @@ Run for medium/high-risk or broad diffs, not every tiny fix.
 - Plan changes behavior covered by an architecture doc but has no `Architecture Alignment` section
 - Relevant architecture doc omitted from the source map
 - Code changes a documented flow, route, API, tool, data boundary, generation mode, payment path, onboarding flow, or generated artifact without updating the matching architecture doc or recording accepted risk
-- `.pipeline/architecture-alignment.json` or equivalent PR evidence is missing when the architecture-doc gate applies
+- `<run-state>/architecture-alignment.json` or equivalent PR evidence is missing when the architecture-doc gate applies
 - Artifact claims `aligned` but diff changes code/docs on only one side of the documented behavior
 
 ## architecture-depth-check

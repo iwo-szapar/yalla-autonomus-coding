@@ -64,7 +64,7 @@ verifiers:
   browser_interactions: "npm run test:e2e -- --grep @browser-interaction"
   perf: "npm run benchmark"
   docs: "npm run docs:check"
-  visual: ".pipeline/visual-evidence/"
+  visual: "<run-state>/visual-evidence/"
 
 ## Test Layout
 
