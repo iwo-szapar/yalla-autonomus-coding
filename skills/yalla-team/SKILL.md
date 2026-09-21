@@ -21,6 +21,8 @@ The orchestrator role and exact subagent prompts live in `${CLAUDE_PLUGIN_ROOT}/
 - Do not invent a parallel ID scheme for new work; reference tasks by the configured tracker ID format.
 - The configured tracker is the canonical task store. GitHub Issues are the default; Linear is allowed when `.claude/YALLA.md` sets `tracking_mode: linear`; DB mode is described in `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/SQL-TEMPLATES.md`.
 - Creator != reviewer: the context that writes code does not do final review.
+- Every teammate result names the candidate ID/SHA and worktree path it used. A result for an older candidate is `SUPERSEDED`, not feedback on the current head.
+- Before parallel build work, write `.pipeline/path-ownership.json` with repo-relative file/directory claims and run `npm run yalla:run -- ownership`. Conflicting claims block dispatch; ordinary single-agent `/yalla` runs do not need this artifact.
 
 ## Flow
 
@@ -28,6 +30,8 @@ The orchestrator role and exact subagent prompts live in `${CLAUDE_PLUGIN_ROOT}/
 2. Use `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/TEAMMATE-PROMPTS.md` for exact subagent prompts and `${CLAUDE_PLUGIN_ROOT}/agents/yalla-lead.md` for orchestration.
 3. Planning: spawn codebase analyst, solution architect, spec validator, and red team for non-trivial planning.
 4. Build: use tester-led vertical slices when feasible. Tester owns behavior evidence; implementer owns production code.
+   - Bind each assignment to the current branch, base SHA, head SHA, worktree path, and declared path claim.
+   - Refresh the candidate after integrated source changes and before accepting test/review evidence.
 5. Review: spawn fresh-context reviewers based on risk tier and triggered checks.
 6. Compound and Ship: use `/yalla` phases exactly, including PR-only default and `gh pr checks` as CI source of truth.
 

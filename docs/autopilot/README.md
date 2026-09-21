@@ -16,6 +16,8 @@ The dry-run path must remain safe:
 - Resolve the target repo from `YALLA_REPO`, then `gh repo view`, then a placeholder.
 - Probe one canonical `issue-###`.
 - Write `.pipeline/autopilot-state.json` and `.pipeline/loop-telemetry.json`.
+- Acquire an exclusive local `.pipeline/run.lock` while replacing state, then release it.
+- Append the completed stop state to `.pipeline/run-log.jsonl`.
 - Make no GitHub mutations.
 - Never claim completion unless the run's proof-contract verdict is `PROVEN`.
 
@@ -63,10 +65,18 @@ High-risk tasks should force `strict` even when the repo default is lower ceremo
 
 Scheduled runs need durable state so retries do not double-spend tokens or duplicate work.
 
-- `.pipeline/autopilot-state.json` - current loop state, lock owner, selected issue, last safe checkpoint.
-- `.pipeline/loop-telemetry.json` - timing, command results, proof verdicts, and stop reasons.
-- `.pipeline/run-log.jsonl` - append-only per-attempt events for audit and debugging.
-- `.pipeline/token-budget.json` - soft and hard limits for model/tool usage per loop.
+- `.pipeline/autopilot-state.json` - current stop state, logical lock owner, selected issue, allowed capabilities, and last safe checkpoint.
+- `.pipeline/loop-telemetry.json` - command results, iteration usage, side-effect attempts, and stop reason for the current attempt.
+- `.pipeline/run-log.jsonl` - append-only completed attempt states for audit and debugging.
+- `.pipeline/run.lock` - short-lived exclusive writer token. Its presence blocks another state writer; it is not evidence that a task is complete.
+
+The current dry-run does not yet measure model tokens. `autopilot.token_budget`
+is a configured limit for later assisted/unattended runtimes, not a claim that a
+`.pipeline/token-budget.json` artifact is already enforced.
+
+Candidate-aware execution additionally uses `.pipeline/candidate.json`,
+candidate-bound artifact metadata, operation receipts, and remote-job telemetry.
+See `knowledge/yalla/ARTIFACTS.md`.
 
 State files are local by default. Commit them only when they explain a review decision or when the repo intentionally uses committed state for audit.
 
@@ -75,6 +85,10 @@ State files are local by default. Commit them only when they explain a review de
 The loop must stop instead of pushing through uncertainty when any of these happen:
 
 - Proof-contract verdict is `NOT_PROVEN` or `INCONCLUSIVE`.
+- Candidate identity is stale, superseded, mismatched, or schema-incompatible.
+- Baseline failure needs a separate repair instead of contaminating the candidate loop.
+- A policy gate or protected capability lacks explicit approval.
+- A per-candidate remote-job, full-suite, or production-build budget is exhausted.
 - A required command fails twice for the same reason.
 - A reviewer check returns Fail.
 - The diff exceeds configured size, file-count, or risk limits.

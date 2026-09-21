@@ -30,6 +30,13 @@ gh pr create --base "$BASE_BRANCH" --title "[issue-###] [description]" --body "$
 ## Risk Tier
 - [low|medium|high] - [why]
 
+## Candidate Integrity
+- Candidate: [candidate_id] at [head_sha]
+- Identity: [repository / worktree / branch / base_sha]
+- Contract/config/policy: [current or named revalidation]
+- Remote jobs: [built/reused counts, duration, cost, retries, or N/A]
+- Failure classification: [candidate|baseline|infrastructure|identity|policy|superseded, or none]
+
 ## Product Intent
 - Applies: [true|false and why]
 - Outcome/metric: [desired outcome + metric/proxy]
@@ -67,6 +74,7 @@ Decision needed from the operator/maintainer:
 
 ## Review Checks
 - [x] security-check: Pass
+- [x] candidate-integrity-check: Pass
 - [x] correctness/success-invariant-check: Pass
 - [x] test/evidence-check: Pass
 - [x] reviewability-check: Pass

@@ -13,6 +13,23 @@ project_name: my-project
 base_branch: main               # branch new work is cut from and PRs target
 tech_stack: "<describe your stack — e.g. Node + TypeScript + Postgres>"
 
+# Optional for T1/T2 release work. The adapter stays repository-owned and
+# provider-neutral; T0/local work does not need it.
+release_adapter: ""             # e.g. ".claude/release-adapter.json"
+
+## Capabilities
+
+# Fail-closed authority for consequential mutations. `read_repo` and
+# `write_worktree` are the only defaults when this block is omitted. Add branch
+# commit/push/PR permissions only for the run mode that needs them. Merge,
+# production, provider configuration, secrets, migrations, pricing, and
+# external sends must not be persisted here. The local runner never authorizes
+# protected actions or executes repository-supplied release preflights. An
+# external operator-controlled executor must independently verify identity,
+# approval, and policy before performing any consequential action.
+capabilities:
+  allowed: [read_repo, write_worktree]
+
 ## Commands
 
 # The pipeline runs these at the test/build gates. Use whatever your project uses.

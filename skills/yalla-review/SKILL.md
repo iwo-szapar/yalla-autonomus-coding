@@ -31,11 +31,23 @@ git diff "$BASE_BRANCH"
 
 Also read `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARTIFACTS.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/EVIDENCE-GATES.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/TEST-SEAMS.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/ARCHITECTURE-DEPTH.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/PROJECT-CHECKS.md`, `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/REVIEW-CHECKS.md`, and `${CLAUDE_PLUGIN_ROOT}/knowledge/product/INTENDED-VS-IMPLEMENTED.md` before launching reviewers.
 
-Read `.pipeline/classification.json` and `.pipeline-state.json` when present. Treat their persisted `required_gates` as a floor: final `review_evidence.required_checks` must retain every armed evidence check, and the corresponding evidence gate must remain applicable. Planning or review may add gates but must not silently downgrade one to N/A.
+Read `.pipeline/goal-contract.json`, `.pipeline/classification.json`, `.pipeline-state.json`, and `.pipeline/candidate.json` when present. Run `npm run yalla:run -- status` before trusting checkpoints or evidence. Confirm acceptance exactly covers the goal criteria and required commands. Treat their persisted `required_gates` as a floor: final `review_evidence.required_checks` must retain every armed evidence check, all seven portable evidence gates need applicable/pass or concrete N/A decisions, and an applicable gate cannot be downgraded. Artifact content, binding metadata, and dependency digests must all be current.
+
+Reject review input unless candidate state is `RESUMABLE_EXACT` and every artifact used for a pass is `CURRENT`. If the diff touches `AGENTS.md`, `CLAUDE.md`, `.claude/YALLA.md`, Yalla skills/agents/hooks, capability policy, or a release adapter, refresh the candidate and re-run review in fresh context. A late asynchronous result for another candidate is `SUPERSEDED`, not a fix request or approval for the new head.
 
 ## Step 2: Launch Reviewers
 
 ### Always run:
+
+**candidate-integrity-check:**
+> "Do the repository, worktree, branch, base/head SHAs, goal contract, config, trust policy, checkpoint, and all evidence used here belong to the same exact candidate, with unchanged declared input digests?"
+
+Specifics to check:
+- `npm run yalla:run -- status` reports `RESUMABLE_EXACT`
+- Checkpoint, classification, evaluator, test, review, and outcome artifacts used for the verdict report `CURRENT`, with content and binding-metadata digests intact
+- Review started after the most recent source or trust-root change
+- A stale or unbound artifact is excluded from `PROVEN`
+- Parallel implementers declared non-overlapping path ownership
 
 **security-check:**
 > "Does this change introduce SQL injection, XSS, SSRF, auth bypass, exposed secrets, or missing input validation?"

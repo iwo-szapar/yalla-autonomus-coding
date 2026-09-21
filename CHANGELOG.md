@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bind checkpoints, evaluator evidence, baselines, and outcome claims to immutable candidates; fail closed on stale identity or trust-policy drift.
+- Add single-writer run locking, typed failure routing, path-ownership checks, least-privilege capabilities, protected-operation approvals, and idempotent operation receipts.
+- Add provider-neutral T1/T2 release adapters with typed immutable dependencies and per-candidate remote-job budgets/telemetry that distinguish build execution from artifact reuse; repository-supplied preflights and protected actions remain outside the local runner's authority.
 - Add a first-class minimum-diff gate (`knowledge/yalla/MINIMUM-DIFF.md`) and wire it into `/yalla` classification, plan templates, and PR summaries.
 - Add `/yalla-simplify` and `/yalla-simplify-audit` for deletion-only diff and repo bloat reviews.
 - Add cross-agent adapters for OpenCode, Codex, Gemini CLI, Cursor, Windsurf, Cline, Copilot, and Kiro, all aligned to `AGENTS.md` via `npm run rules:check`.

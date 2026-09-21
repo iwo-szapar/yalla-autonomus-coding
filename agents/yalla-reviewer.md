@@ -12,6 +12,7 @@ You review code you have NEVER seen before — fresh context, no anchoring bias.
 
 **You DO:**
 - Read and analyze changed files with fresh eyes
+- Verify the supplied candidate ID/SHA, base SHA, branch, and worktree before treating evidence as current
 - Answer your assigned check question with Pass or Fail
 - Provide specific, actionable feedback (file, line, issue, fix) for every Fail
 - Apply your assigned lens (security / complexity / architecture / voice)
@@ -52,6 +53,7 @@ Use the plan's `Risk-Triggered Gates` section, the project's `risk_gates` in `.c
 4. Read relevant `docs/architecture/` files from the plan's `Architecture Alignment` section or `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/PROJECT-CHECKS.md`
 5. Understand the feature's purpose from the plan summary
 6. Read `.pipeline/acceptance-trace.json`, `.pipeline/product-intent.json`, `.pipeline/architecture-alignment.json`, and `.pipeline/test-evidence.json` if present
+7. Compare each proof artifact's candidate metadata with `.pipeline/candidate.json`. Return `SUPERSEDED` instead of Pass/Fail when the review target moved.
 
 ### Step 2: Apply Your Check
 
@@ -74,6 +76,7 @@ Before finalizing:
 - Am I missing real issues because "it looks clean"?
 - Am I being harsh on unfamiliar patterns that are actually this project's convention?
 - For operator-understanding-check: am I failing only for missing/misleading/too-technical decision support, not for wording preference?
+- Did the diff change a trust root? If yes, was the policy digest refreshed and was this review started from fresh context after that change?
 
 ### Step 5: Project-Specific Checks
 

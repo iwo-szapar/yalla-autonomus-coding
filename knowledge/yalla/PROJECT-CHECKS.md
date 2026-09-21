@@ -126,6 +126,9 @@ Use these when the task triggers the relevant surface or failure mode. Mark `N/A
 - [ ] Existing PR updates fetch and address blocking review comments before shipping
 - [ ] PR readiness and post-push loops use `gh pr checks` as the source of truth
 - [ ] PR body identifies reviewer entry points, risky behavior changes, accepted risks, and test evidence
+- [ ] Final review/test/outcome artifacts bind to the same candidate ID/SHA; `yalla:run -- resume` is `RESUMABLE_EXACT`
+- [ ] Failures are classified as candidate, baseline, infrastructure, identity, policy, or superseded before retry/repair
+- [ ] Parallel team work has non-overlapping path claims; single-agent work records a concrete N/A instead of creating lease ceremony
 - [ ] Merge conflict resolution stays minimal, leaves no markers, and regenerates lockfiles through package tools
 - [ ] Broad/high-risk diffs run strict structural review for code-judo simplification, spaghetti growth, file-size blowups, and unearned abstractions
 
@@ -135,6 +138,7 @@ Run only when the listed trigger applies. A generic `N/A` is not valid; write th
 
 - [ ] External API/SDK/provider/protocol/browser/platform/generated-setup behavior -> `.pipeline/external-grounding.json` names current official/upstream sources, the exact claims used, and implementation consequences
 - [ ] Preview/staging/production/remote proof claim -> `.pipeline/runtime-e2e-preflight.json` names the deployed target revision and base revision, safe environment shape, mutation guardrails, inherited baseline failures, and exact proves/does-not-prove limits
+- [ ] T1/T2 release work -> repository-owned release adapter declares immutable repository/project/team/target identity, typed immutable dependency versions, focused/full checks, smoke assertions, protected capabilities, and remote-job budgets; the local runner treats reservations as telemetry only, while an external operator-controlled executor independently runs the exact-candidate preflight and verifies approval before consequential execution
 - [ ] New or ported public route/API/CLI/job/webhook/cron -> surface parity names two nearest siblings and applies or justifies auth, rate-limit, error, telemetry, time-budget, and header behavior
 - [ ] Untrusted input or rendered/exported output -> trust map names each writer/hostile input neutralization and each consuming execution context/output guard
 - [ ] Collection read or per-item external call -> volume envelope states busiest realistic case, cost math, a page/concurrency/time bound, and explicit truncation behavior

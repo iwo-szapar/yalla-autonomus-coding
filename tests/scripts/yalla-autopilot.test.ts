@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { isMutatingCommand, runYallaAutopilot, runYallaAutopilotQueue, type CommandRunner } from '../../scripts/yalla-autopilot.js'
+import { acquireRunLock, releaseRunLock } from '../../scripts/yalla-control.js'
 
 function tempRoot() {
   return mkdtempSync(join(tmpdir(), 'yalla-autopilot-'))
@@ -53,6 +54,24 @@ describe('scripts/yalla-autopilot.ts', () => {
       iterations_used: 1,
       side_effects_attempted: [],
     })
+  })
+
+  it('does not write a queue report when another writer holds the run lock', async () => {
+    const root = tempRoot()
+    const lock = acquireRunLock(root, 'other-writer')
+    try {
+      await expect(runYallaAutopilotQueue({
+        mode: 'dry-run',
+        rootDir: root,
+        repo: 'owner/repo',
+        commandRunner: async (_command, args) => args[0] === 'auth'
+          ? { stdout: 'ok', stderr: '', exitCode: 0 }
+          : { stdout: '[]', stderr: '', exitCode: 0 },
+      })).rejects.toThrow('already held by other-writer')
+      expect(existsSync(join(root, '.pipeline/autopilot-queue-report.json'))).toBe(false)
+    } finally {
+      releaseRunLock(lock)
+    }
   })
 
   it('stops before issue work when GitHub auth is missing', async () => {

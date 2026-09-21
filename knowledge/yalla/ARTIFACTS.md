@@ -16,6 +16,156 @@ Tiny hotfixes may use minimal evidence mode: no committed `.pipeline/*` artifact
 
 ## Schemas
 
+### Candidate binding and common envelope
+
+Before final-head testing or review, run:
+
+```bash
+npm run yalla:run -- candidate --issue-id issue-### --run-id <stable-run-id>
+```
+
+`.pipeline/candidate.json` binds the run to repository/worktree/branch identity,
+base and head SHAs, working-tree fingerprint, contract digest, Yalla config
+digest, trust-policy digest, schema version, and Yalla version. Source, contract,
+configuration, or policy drift creates a new candidate; prior proof is stale.
+
+Runner-managed artifacts carry `_meta`:
+
+```json
+{
+  "_meta": {
+    "schema_version": 1,
+    "yalla_version": "1.4.0",
+    "producer": "yalla-run:evaluate",
+    "produced_at": "2026-09-20T12:00:00.000Z",
+    "candidate_id": "sha256...",
+    "candidate_sha": "git-sha",
+    "contract_digest": "sha256...",
+    "config_digest": "sha256...",
+    "policy_digest": "sha256...",
+    "input_digests": {},
+    "content_digest": "sha256...",
+    "binding_digest": "sha256(content plus immutable metadata)"
+  }
+}
+```
+
+After writing a manual JSON proof artifact such as acceptance trace, review
+results, or outcome evaluation, bind it to the current candidate:
+
+```bash
+npm run yalla:run -- stamp --target .pipeline/outcome-evaluation.json
+```
+
+The binding digest covers both content and metadata, including the complete dependency map. Removing or replacing dependency digests after stamping makes the artifact stale. An unbound legacy artifact remains inspectable, but it cannot support an exact
+resume, evaluator decision, loop continuation, or `PROVEN`. `stamp` records the
+default dependency chain for acceptance, test, review, and outcome artifacts;
+use repeated `--input .pipeline/<dependency>.json` arguments for additional
+inputs whose changes must invalidate the stamped result.
+
+`PROVEN` binding is fail-closed: classification, baseline, acceptance trace,
+test evidence, and review results must already exist, be current for the
+candidate, and satisfy their semantic pass rules. Acceptance must exactly cover
+the goal contract, goal-required commands must appear in passing test evidence,
+and final required checks/evidence-gate decisions must preserve classification.
+A bare verdict field is never proof.
+
+### `.pipeline/baseline.json`
+
+Capture inherited failures before candidate repair work:
+
+```bash
+npm run yalla:run -- baseline --finding "existing failing check and evidence"
+```
+
+Do not copy an unrelated baseline repair into the candidate. Link a separate
+issue/PR and classify the evaluator result as `BASELINE_FAILURE`.
+
+### Failure taxonomy
+
+| Class | Loop action |
+| --- | --- |
+| `CANDIDATE_FAILURE` | Repair the candidate and mint/revalidate the next exact candidate. |
+| `BASELINE_FAILURE` | Stop and separate the inherited repair. |
+| `INFRA_ERROR` | Retry the same immutable candidate within budget. |
+| `IDENTITY_MISMATCH` | Stop; resolve repository/worktree/branch identity. |
+| `POLICY_BLOCKED` | Stop; obtain explicit capability or narrow the action. |
+| `SUPERSEDED` | Discard the result; it belongs to an older candidate. |
+
+### Operation and remote-job receipts
+
+For T1/T2 remote work, the repository adapter declares the immutable provider
+identity and the preflight contract an external operator-controlled executor
+must verify:
+
+```json
+{
+  "candidate_id": "sha256...",
+  "project_identity": {
+    "repository": "owner/repository",
+    "project_id": "immutable-provider-project-id",
+    "team_id": "immutable-provider-team-id",
+    "target": "production-candidate"
+  },
+  "command": "npm run release:preflight",
+  "status": "pass",
+  "executed_at": "2026-09-20T12:00:00.000Z",
+  "evidence_ref": ".pipeline/preflight-output.json"
+}
+```
+
+The local `npm run yalla:run -- preflight` command always returns
+`POLICY_BLOCKED`; it never executes a repository-supplied command. An external
+executor may produce equivalent evidence in its own trusted store, but local
+`.pipeline/release-preflight.json` and `.pipeline/preflight-output.json` files
+are non-authoritative and cannot be stamped into local proof. The external
+executor must independently reject missing, stale, failed, or
+identity-mismatched evidence before doing consequential work.
+
+`.pipeline/operation-receipts.json` records non-protected local actions by
+operation ID, candidate, capability, action, and target before execution, then
+records `succeeded` or `failed`. Reusing a pending or terminal ID is a no-op;
+changing its scope is an error. The local runner refuses to reserve every
+protected capability. An external controller may mirror a protected operation
+as a pending receipt for observability with
+`execution_authority: none-local-telemetry-only`; routine locally authorized
+receipts use `local-configured-capability`. A missing or mismatched authority
+class fails closed. The telemetry-only record is never approval or execution
+authority. The local runner may only close an already-existing
+receipt with the same operation ID/scope; it can do so after candidate drift so
+the real outcome does not remain pending.
+
+`.pipeline/remote-jobs.json` reserves a local telemetry budget before a focused
+check, full suite, preview/production build, or smoke run starts. Every new
+record carries `execution_authority: none-local-telemetry-only`; an external
+executor must never consume it as a command. Completion records success/fail,
+duration, build-versus-reuse, retry reason, and known cost. Blocked attempts are
+retained. Reservations require a valid release adapter whose repository matches
+the exact candidate. Completion can be recorded after candidate drift. A
+`reused` artifact counts as a remote job but not as another full-suite or
+production-build execution.
+
+### `.pipeline/path-ownership.json`
+
+Only parallel team runs need path claims:
+
+```json
+{
+  "claims": [
+    { "owner": "implementer", "paths": ["src/api"], "changed_paths": ["src/api/checkout.ts"] },
+    { "owner": "tester", "paths": ["tests/api"], "changed_paths": ["tests/api/checkout.test.ts"] }
+  ]
+}
+```
+
+Run `npm run yalla:run -- ownership`. Claims must be canonical repository-relative
+paths: aliases, absolute paths, escapes, and symlinks outside the repository are
+rejected. Each `changed_paths` entry must be inside that same owner's claim.
+Parallel runs require per-owner changed-path evidence, and any unattributed,
+false, multiply attributed, overlapping, or globally unowned change returns
+`CONFLICT`. This is a coordination check, not a rigid lock on ordinary
+single-agent work.
+
 ### `.pipeline/classification.json`
 
 ```json
@@ -380,10 +530,14 @@ Verdict rules:
 
 Autopilot state is local by default and should not be committed unless it explains a review decision or the repo intentionally audits loop state in git. See `docs/autopilot/` for the operating model.
 
-- `.pipeline/autopilot-state.json` records selected issue, lock owner, level, mode, and last safe checkpoint.
-- `.pipeline/loop-telemetry.json` records command status, timings, proof verdicts, budget usage, and stop reasons.
-- `.pipeline/run-log.jsonl` is append-only per-attempt history for scheduled loops.
-- `.pipeline/token-budget.json` records soft and hard budget limits for unattended loops.
+- `.pipeline/autopilot-state.json` records selected issue, logical lock owner, mode, allowed capabilities, and last safe checkpoint.
+- `.pipeline/loop-telemetry.json` records command status, iteration usage, attempted side effects, and stop reason.
+- `.pipeline/run-log.jsonl` is append-only completed-attempt history.
+- `.pipeline/run.lock` is the short-lived exclusive local writer token and must never be treated as completion evidence.
+
+`autopilot.token_budget` remains a configured limit for a future assisted or
+unattended runtime. Do not claim token enforcement from a nonexistent
+`.pipeline/token-budget.json` artifact.
 
 Any autopilot artifact that reports `NOT_PROVEN`, `INCONCLUSIVE`, exhausted budget, failed review, ambiguous auth, or active kill switch must stop progression instead of opening or advancing work as successful.
 

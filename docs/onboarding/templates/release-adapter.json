@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "tier": "T1",
+  "project_identity": {
+    "repository": "owner/repository",
+    "project_id": "immutable-provider-project-id",
+    "team_id": "immutable-provider-team-id",
+    "target": "production-candidate"
+  },
+  "dependencies": [
+    {
+      "kind": "git-revision",
+      "name": "upstream-service",
+      "version": "0123456789abcdef0123456789abcdef01234567",
+      "environment": "staging"
+    }
+  ],
+  "commands": {
+    "preflight": "npm run release:preflight",
+    "focused_checks": [
+      "npm run test:focused"
+    ],
+    "full_checks": [
+      "npm test"
+    ],
+    "smoke_assertions": [
+      "Rendered route contains its substantive marker",
+      "API response matches the frozen contract"
+    ]
+  },
+  "protected_capabilities": [
+    "deploy_production",
+    "promote_production"
+  ],
+  "budgets": {
+    "max_remote_jobs_per_candidate": 4,
+    "max_full_suites_per_candidate": 1,
+    "max_production_builds_per_candidate": 1
+  }
+}

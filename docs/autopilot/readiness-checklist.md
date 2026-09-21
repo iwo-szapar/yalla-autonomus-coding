@@ -9,6 +9,10 @@ Use this checklist before moving a repo from local dry-run to scheduled or unatt
 - [ ] `npm run yalla:autopilot -- run --issue issue-### --mode dry-run` completes without GitHub mutations.
 - [ ] `.pipeline/autopilot-state.json` records the selected issue and safe stop state.
 - [ ] `.pipeline/loop-telemetry.json` records command status, timing, and proof verdict.
+- [ ] `.pipeline/candidate.json` binds the run to repository, worktree, branch, base/head SHAs, contract, config, and trust policy.
+- [ ] Concurrent writers are refused by `.pipeline/run.lock`, and a stale/mismatched checkpoint cannot resume automatically.
+- [ ] Default capabilities are least privilege; no protected capability is persisted in `.claude/YALLA.md`.
+- [ ] T1/T2 repositories pass local `release_adapter` schema/identity validation; an external operator-controlled executor owns immutable provider-identity preflight before consequential execution.
 - [ ] `npm run eval:yalla:smoke` passes.
 
 ## L1: Scheduled Report-Only
@@ -17,6 +21,7 @@ Use this checklist before moving a repo from local dry-run to scheduled or unatt
 - [ ] Schedule is disabled until manual report-only runs are stable.
 - [ ] Workflow uses least-privilege GitHub permissions.
 - [ ] Workflow has concurrency protection for the repo.
+- [ ] Parallel agents declare non-overlapping path ownership before implementation.
 - [ ] Queue selection requires an explicit automation label.
 - [ ] Block labels prevent selection.
 - [ ] Report output includes selected issue, skipped issues, reasons, budget usage, and stop state.
@@ -32,6 +37,7 @@ Use this checklist before moving a repo from local dry-run to scheduled or unatt
 - [ ] The run records acceptance criteria before implementation.
 - [ ] The run records deterministic proof when a deterministic seam exists.
 - [ ] PR body includes proof-contract verdict and artifact summary.
+- [ ] PR body names the exact candidate ID/SHA and separates candidate, baseline, infrastructure, identity, policy, and superseded failures.
 - [ ] `PROVEN` is required before the PR can be described as complete or ready.
 - [ ] `NOT_PROVEN` and `INCONCLUSIVE` PRs are clearly labeled for human follow-up.
 
@@ -40,6 +46,7 @@ Use this checklist before moving a repo from local dry-run to scheduled or unatt
 - [ ] Only low-risk or explicitly allowed medium-risk issues are eligible.
 - [ ] Diff size and file-count limits are configured.
 - [ ] Token, time, and retry budgets are configured.
+- [ ] Remote-job budgets cap full suites and production builds per candidate, and build/reuse/duration/cost/retry telemetry is retained.
 - [ ] Required checks are known for the target repo.
 - [ ] Maker/checker separation is enforced.
 - [ ] Failed review checks block shipment.
@@ -50,6 +57,7 @@ Use this checklist before moving a repo from local dry-run to scheduled or unatt
 
 - [ ] Repo owner explicitly opted in to unattended operation.
 - [ ] Auto-merge is disabled by default and separately opted in if wanted.
+- [ ] The local runner cannot authorize protected operations or execute repository-supplied preflights; an external operator-controlled executor independently verifies exact candidate/provider identity, policy, and approval. Local receipts are telemetry only, duplicate IDs cannot repeat a recorded side effect, and pending receipts can reach terminal state after candidate drift.
 - [ ] High-risk labels force `strict` mode or make the issue ineligible.
 - [ ] Kill switch has been tested in a real workflow run.
 - [ ] A budget-exhaustion run stops cleanly and preserves artifacts.

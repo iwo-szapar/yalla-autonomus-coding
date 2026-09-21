@@ -16,6 +16,8 @@ Required:
 - Test layout fields so the tester knows where tests belong.
 - At least three project gotchas that a new contributor would otherwise miss.
 - A small set of risk gates that match subsystems your repo actually has.
+- A least-privilege `capabilities.allowed` list. Keep protected actions out of persistent config and the local runner entirely; an external operator-controlled executor must independently verify candidate, action, target, policy, and approval.
+- For a deployable T1/T2 repository, a provider-neutral release adapter copied from `docs/onboarding/templates/release-adapter.json` and pinned to the immutable project identity.
 
 Recommended before autopilot:
 
@@ -32,7 +34,7 @@ Recommended before autopilot:
 3. Run the config checklist below.
 4. Customize `knowledge/yalla/PROJECT-CHECKS.md` only where your repo has real invariants.
 5. Configure GitHub labels and issue shape.
-6. Run one manual `/yalla` task with a small bug or docs improvement.
+6. Run one manual `/yalla` task with a small bug or docs improvement. Create the goal contract, initialize the candidate after the target worktree exists, and prove that source or policy drift makes `resume` fail closed.
 7. Run `npm run eval:yalla:smoke` from the Yalla repo if you plan to modify evals or autopilot.
 8. Run `npm run yalla:autopilot -- queue --mode dry-run` only after labels exist.
 9. Move to scheduled/report-only automation only after the autopilot readiness checklist passes.
@@ -71,6 +73,8 @@ Open `.claude/YALLA.md` and fill these sections in this order:
 - `domains` - map your team's words to subsystems. Use words that appear in issue titles.
 - `gotchas` - specific rules that prevent known mistakes.
 - `risk_gates` - only gates that match real subsystems.
+- `capabilities.allowed` - grant only routine run capabilities. Never persist protected capabilities such as merge, production deploy/promotion, provider configuration, secrets, migrations, pricing, or external sends.
+- `release_adapter` - for T1/T2 repositories, point to a checked-in JSON adapter declaring immutable project identity, typed immutable dependency versions, preflight/focused/full/smoke commands, protected capabilities, and per-candidate remote-job budgets. The preflight command is a contract for an external operator-controlled executor; the local runner refuses to execute it. Local remote-job reservations are budget telemetry only and never authorize execution.
 - `autopilot` - keep `enabled: false` until dry-run and readiness checks pass.
 
 ## Minimum Useful `YALLA.md`

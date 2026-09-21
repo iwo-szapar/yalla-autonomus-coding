@@ -32,6 +32,7 @@ project_name: example
 base_branch: main
 tracking_mode: github
 test_dir: tests/
+release_adapter: ".claude/release-adapter.json"
 
 commands:
   test: "npm test"
@@ -79,6 +80,9 @@ ceremony:
   allow_user_override: true
   minimum_diff_default_files_budget: 3
   minimum_diff_default_loc_budget: 120
+
+capabilities:
+  allowed: [read_repo, write_worktree, commit_branch, push_branch, open_pr, merge_pr, made_up]
 `)
 
     expect(config.repo).toBe('example/repo')
@@ -108,6 +112,8 @@ ceremony:
     expect(config.ceremony.allowUserOverride).toBe(true)
     expect(config.ceremony.minimumDiffDefaultFilesBudget).toBe(3)
     expect(config.ceremony.minimumDiffDefaultLocBudget).toBe(120)
+    expect(config.releaseAdapterPath).toBe('.claude/release-adapter.json')
+    expect(config.capabilities.allowed).toEqual(['read_repo', 'write_worktree', 'commit_branch', 'push_branch', 'open_pr', 'merge_pr'])
   })
 
   it('loads explicit config paths relative to root dir', () => {
