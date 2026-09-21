@@ -763,10 +763,29 @@ function inspectGit(rootDir: string, baseBranch: string) {
 }
 
 export function normalizeRepositoryIdentity(value: string) {
-  const trimmed = String(value ?? '').trim().replace(/\.git$/, '').replace(/\/$/, '')
-  const sshMatch = trimmed.match(/^[^@]+@[^:]+:(.+)$/)
-  const path = sshMatch ? sshMatch[1] : trimmed.replace(/^[a-z]+:\/\/[^/]+\//i, '')
-  return path.toLowerCase()
+  const trimmed = String(value ?? '').trim().replace(/\/$/, '')
+  const sshMatch = trimmed.match(/^[^@]+@([^:]+):(.+)$/)
+  if (sshMatch) return canonicalRepositoryAddress(sshMatch[1], sshMatch[2])
+
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed)
+      return canonicalRepositoryAddress(url.host, url.pathname)
+    } catch {
+      return trimmed.toLowerCase()
+    }
+  }
+
+  const path = normalizeRepositoryPath(trimmed)
+  return path.split('/').length === 2 ? `github.com/${path}` : path
+}
+
+function canonicalRepositoryAddress(host: string, path: string) {
+  return `${host.trim().toLowerCase()}/${normalizeRepositoryPath(path)}`
+}
+
+function normalizeRepositoryPath(path: string) {
+  return path.trim().replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '').toLowerCase()
 }
 
 function safeGit(run: (args: string[]) => string, args: string[]) {

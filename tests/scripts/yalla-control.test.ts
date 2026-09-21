@@ -12,6 +12,7 @@ import {
   completeOperationReceipt,
   detectPathOverlaps,
   findUnownedChangedPaths,
+  normalizeRepositoryIdentity,
   normalizePathClaims,
   recordOperationReceipt,
   recordRemoteJob,
@@ -132,6 +133,21 @@ describe('candidate integrity control plane', () => {
     const root = gitRoot()
     expect(() => createCandidateIdentity({ rootDir: root, repository: 'other/repo', baseBranch: 'main' })).toThrow('does not match observed origin')
     expect(() => createCandidateIdentity({ rootDir: root, repository: 'owner/repo', baseBranch: 'missing-base' })).toThrow('Unable to resolve a Git base SHA')
+  })
+
+  it('binds repository identity to the remote host as well as owner and name', () => {
+    expect(normalizeRepositoryIdentity('owner/repo')).toBe('github.com/owner/repo')
+    expect(normalizeRepositoryIdentity('git@github.com:Owner/Repo.git')).toBe('github.com/owner/repo')
+    expect(normalizeRepositoryIdentity('https://github.com/owner/repo.git')).toBe('github.com/owner/repo')
+    expect(normalizeRepositoryIdentity('https://evil.example/owner/repo.git')).toBe('evil.example/owner/repo')
+
+    const root = gitRoot()
+    const created = candidate(root)
+    execFileSync('git', ['remote', 'set-url', 'origin', 'https://evil.example/owner/repo.git'], { cwd: root })
+    expect(validateCandidate(created, { rootDir: root, repository: 'owner/repo', baseBranch: 'main' })).toMatchObject({
+      state: 'IDENTITY_MISMATCH',
+      reasons: ['Declared repository github.com/owner/repo does not match observed origin evil.example/owner/repo.'],
+    })
   })
 
   it('rejects stale evaluator artifacts from another candidate', () => {

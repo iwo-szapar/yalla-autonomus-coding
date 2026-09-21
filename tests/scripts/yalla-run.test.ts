@@ -522,7 +522,7 @@ describe('scripts/yalla-run.ts', () => {
     await runYallaRun({ command: 'goal', rootDir: root, message: 'Bind adapter identity', criteria: ['exact adapter'] })
     await runYallaRun({ command: 'candidate', rootDir: root, issueId: 'issue-47' })
     const result = await runYallaRun({ command: 'remote-job', rootDir: root, operationId: 'remote-1', jobKind: 'full-suite', jobStatus: 'reserve', artifactAction: 'built' })
-    expect(result).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('adapter repository other/repo does not match candidate repository owner/repo') })
+    expect(result).toMatchObject({ exitCode: 1, instruction: expect.stringContaining('adapter repository other/repo does not match candidate repository github.com/owner/repo') })
   })
 
   it('blocks declared parallel ownership overlap', async () => {
