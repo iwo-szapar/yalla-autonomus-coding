@@ -50,6 +50,10 @@ If empty, ask "What are we building?" Do not proceed without a clear description
 - Every run must produce `.pipeline/outcome-evaluation.json` before shipping.
 - Every non-tiny run must start from `.pipeline/goal-contract.json` or an equivalent issue body section that names desired end state, success criteria, constraints, budget, forbidden shortcuts, and required evidence. Use `npm run yalla:run -- goal ...` when the cloned Yalla repo is available.
 - Every non-tiny run must append structured lifecycle entries to `.pipeline/events.jsonl` and write checkpoints after classify, plan, each meaningful work slice, test, review, and ship. Use `npm run yalla:run -- event ...` and `npm run yalla:run -- checkpoint ...` when the cloned Yalla repo is available.
+- Before a checkpoint may support resume, test, review, or `PROVEN`, initialize or refresh `.pipeline/candidate.json` with `npm run yalla:run -- candidate --issue-id issue-### --run-id <stable-run-id>`. The declared repository must match the observed origin and the configured base must resolve; never substitute `HEAD`. Any source, contract, configuration, worktree identity, or trust-policy change invalidates earlier candidate-bound proof.
+- Bind manually written JSON evidence with `npm run yalla:run -- stamp --target .pipeline/<artifact>.json`. Binding covers content plus immutable metadata and the complete dependency map. Unbound, edited-after-binding, dependency-edited, or stale artifacts may be inspected but cannot support exact resume or `PROVEN`.
+- Classify every evaluator failure as `CANDIDATE_FAILURE`, `BASELINE_FAILURE`, `INFRA_ERROR`, `IDENTITY_MISMATCH`, `POLICY_BLOCKED`, or `SUPERSEDED`. Only `CANDIDATE_FAILURE` returns to implementation.
+- Capabilities fail closed. The configured allowlist may grant branch commit/push/PR creation. The local runner never authorizes protected operations or executes repository-supplied release preflights. Merge, production deployment/promotion, provider configuration, secrets, migrations, pricing, and external sends remain unavailable locally and belong to an external operator-controlled executor that independently verifies identity, policy, and approval.
 - Executor and evaluator roles are separate. The evaluator reads goal/evidence/diff and writes `.pipeline/evaluator-results.json`; it does not implement its own fixes.
 - Before shipping, generate or refresh `.pipeline/report.html` with `npm run yalla:run -- report` when the run produced meaningful evidence artifacts.
 - Only verdict `PROVEN` may be described as done, complete, ready to merge, or safe for autopilot progression.
@@ -195,7 +199,7 @@ Classify the task before planning:
 14. Determine `evidence_gate_requirements` for `surface_parity`, `trust_map`, `volume_envelope`, `lifecycle_states`, and `ui_proof`. Record every gate as `applies` or `n/a` with a concrete reason. For each applicable gate, add its matching `surface-parity-check`, `trust-map-check`, `volume-envelope-check`, `lifecycle-state-check`, or `ui-proof-check` to `required_gates`.
 15. Write `.pipeline/classification.json` and add the same fields, gate decisions, and reasons to `.pipeline-state.json`.
 16. Write or update `.pipeline/goal-contract.json` with success criteria, constraints, budget, forbidden shortcuts, and required evidence.
-17. Record the phase in `.pipeline/events.jsonl` and checkpoint with phase `classify`.
+17. Record the classification event. If the final branch/worktree already exists, initialize the candidate and checkpoint `classify`; otherwise defer the resumable checkpoint until Phase 0 creates and enters that worktree.
 
 ### Conditional routing
 
@@ -291,6 +295,12 @@ git worktree add -b "session/issue-$ISSUE_NUMBER-$SLUG" ".claude/worktrees/issue
 ```
 
 If already in a Claude Code worktree flow, use the equivalent worktree-entry mechanism.
+
+After entering the target worktree, initialize the candidate from the existing
+goal contract, then write the deferred `classify` checkpoint and the `track`
+checkpoint. Treat the candidate as an immutable snapshot: refresh it after a
+source, contract, configuration, or policy change before writing new
+candidate-bound proof.
 
 State must include `issue_number`, `issue_url`, `branch`, `task_type`, `scope_mode`, `required_gates`, `phase_split_required`, `risk_tier`, `evidence_mode`, `ceremony_mode`, `minimum_diff_decision`, `architecture_doc_gate`, `architecture_doc_gate_reason`, `product_intent_gate`, `product_intent_gate_reason`, `external_grounding_gate`, `external_grounding_gate_reason`, `runtime_e2e_gate`, `runtime_e2e_gate_reason`, `evidence_gate_requirements`, `merge_policy`, and `phase: "1-plan"`. It must not introduce a parallel ID scheme outside `issue-###`.
 
@@ -603,6 +613,7 @@ After user approval:
    - Core user workflows -> run or define the closest end-to-end path the user would manually check. If automation is missing, either add a focused test or record the manual-validation gap as risk.
    - Real-environment claims -> complete `.pipeline/runtime-e2e-preflight.json` before the run; record the deployed target revision and base revision, safe data shape, mutation guardrails, inherited failures, and exactly what the run proves and does not prove. Only `status: pass` can support `PROVEN`.
 8. Run targeted tests after each meaningful chunk.
+   - After source changes settle for the chunk, refresh the candidate before recording its checkpoint or accepting evaluator evidence. Results arriving for the older candidate are `SUPERSEDED`.
 9. Run the project's `typecheck` and `build` commands (from `.claude/YALLA.md` `commands:`) where relevant.
    - On failure, group errors by file/category before editing.
    - Fix the highest-confidence root cause first, not every visible symptom.
@@ -629,12 +640,16 @@ Security self-check: input validation, SQL safety, auth boundaries, CSP/sanitiza
 9. For customer-critical journeys, include at least one negative-path test for the most likely failure mode, not only happy path.
 10. If a prior incident was cited in the plan, add or identify a regression guard for that exact failure mode.
 11. Run the project's test command (`.claude/YALLA.md` `commands.test`) — ALL tests must pass. Fix and retest until green.
+    - If the base was already red, capture `.pipeline/baseline.json` and classify inherited failures as `BASELINE_FAILURE`; do not fold unrelated repairs into this candidate.
+    - Classify CI/provider/harness failure as `INFRA_ERROR` and retry the same immutable candidate only within its budget.
 12. For user-visible, integration, CLI, performance, or memory claims, write a falsifiable verification entry in `.pipeline/test-evidence.json` with `VERIFIED`, `NOT VERIFIED`, or `INCONCLUSIVE` and the raw command/artifact evidence.
 13. Write `.pipeline/architecture-alignment.json` when the architecture-doc gate applies.
 14. Write `.pipeline/test-evidence.json` with commands, status, seam blockers, claim verification, smoke evidence, and architecture-doc alignment status when the evidence is non-obvious or needs to be committed. Otherwise summarize the same evidence in the PR body.
 15. If evidence is missing, blocked, or inconclusive, set the eventual outcome to `NOT_PROVEN` or `INCONCLUSIVE`; do not call the work complete.
 16. Update `.pipeline-state.json` to `phase: "4-review"`, `test_status: "passing"` only when required test commands passed. Otherwise record the blocker.
-17. Re-read the persisted classification `required_gates`. Final review must retain every armed evidence check and keep its corresponding evidence gate applicable; planning/review may add gates but must not silently downgrade one to N/A. Validate each applicable gate's required enumeration and link it from the acceptance trace or PR body. Treat an unresolved external-grounding or runtime-E2E gap as `NOT_PROVEN`/`INCONCLUSIVE`, never as green evidence.
+17. Re-read the persisted classification `required_gates`. Final review must retain every armed evidence check and keep its corresponding evidence gate applicable; planning/review may add gates but must not silently downgrade one to N/A. Record all seven portable gate decisions in review evidence. Validate each applicable gate's required enumeration and link it from the acceptance trace or PR body. Treat an unresolved external-grounding or runtime-E2E gap as `NOT_PROVEN`/`INCONCLUSIVE`, never as green evidence.
+18. Verify the acceptance trace exactly covers `goal-contract.success_criteria`, and every `goal-contract.required_evidence` command appears as passing test evidence.
+19. Stamp classification, acceptance, test, review, and outcome JSON after their final write. `status` must report their candidate binding as current before they can support the final verdict.
 
 Validation evidence should be reviewer-digestible. For UI, workflow, or integration changes, include screenshots, trace links, HTTP transcripts, console/network summaries, or command output excerpts that prove the behavior without requiring the user to rerun everything.
 
@@ -664,6 +679,12 @@ Before binary review, run a hostile self-critique and write `.pipeline/but-for-r
 - Inspect the code and tests for each failure mode.
 - Fix confirmed issues before external review; record false alarms with evidence.
 
+Before accepting asynchronous review, compare its candidate ID and SHA with
+the active candidate. Discard a late result as `SUPERSEDED`; never ask it to
+repair or approve a newer head. If the diff touches a trust root (`AGENTS.md`,
+`CLAUDE.md`, `.claude/YALLA.md`, Yalla skills/agents/hooks, capability policy,
+or a release adapter), require a fresh policy digest and fresh-context review.
+
 Use reviewer separation wherever tooling allows it: the reviewer must not be the same agent/model context that wrote the implementation. Prefer a stricter or different model for correctness/security review after a broad implementation pass. If separation is unavailable, record that limitation in `.pipeline/review-results.json` and compensate with narrower evidence checks.
 
 Risk-tier the review:
@@ -674,6 +695,7 @@ Risk-tier the review:
 
 Run binary pass/fail checks. Universal checks stay small:
 
+- **candidate-integrity-check:** Do the repository, worktree, branch, base/head SHAs, contract, configuration, trust policy, checkpoint, and reviewed evidence all belong to the same current candidate? Are declared input digests still current?
 - **security-check:** Does this introduce SQL injection, XSS, SSRF, auth bypass, or exposed secrets?
 - **correctness-check:** Do schemas, types, params, and downstream contracts match?
 - **success-invariant-check:** For each changed workflow, can the code report success before the user-visible promise is fulfilled or before an explicit recoverable state is persisted?
@@ -806,6 +828,8 @@ Before committing or opening/updating the PR:
 8. If updating an existing PR, fetch review and discussion comments, group blocking feedback first, and address or explicitly respond to each blocker.
 9. Do not rewrite history, force-push, or clean commits unless the user explicitly approves that separate action.
 10. Read `.pipeline/outcome-evaluation.json`. If verdict is not `PROVEN`, PR copy must say `human review needed` or `not proven`; do not use completion language.
+11. For T1/T2 release work, validate the repository-owned release adapter. Reserve each candidate-bound remote job against its budget before launch, then record success/failure, duration, cost, reuse, and retry reason. Do not move provider commands into Yalla core. Missing adapters and budget stops are `POLICY_BLOCKED`, not permission to run first or silently raise the limit.
+12. Record every non-protected local operation before executing it and record a terminal state afterward. Never authorize or execute a protected action locally; hand it to an external operator-controlled executor that independently verifies the exact candidate, scope, policy, and human approval.
 
 ---
 
@@ -925,6 +949,7 @@ Merge only if `.pipeline-state.json` has `merge_policy: "auto-merge-approved"` f
 4. Read `.pipeline/acceptance-trace.json`, `.pipeline/architecture-alignment.json`, `.pipeline/test-evidence.json`, and `.pipeline/review-results.json` if present.
 5. Read `.pipeline/outcome-evaluation.json` if present.
 6. Resume from the recorded phase.
+7. Run `npm run yalla:run -- resume`. Continue automatically only on `RESUMABLE_EXACT`; revalidate or stop on `RESUMABLE_AFTER_REVALIDATION`, `SUPERSEDED`, `IDENTITY_MISMATCH`, or `INCOMPATIBLE_SCHEMA`.
 
 ---
 

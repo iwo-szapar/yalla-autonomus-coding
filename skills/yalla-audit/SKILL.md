@@ -30,9 +30,9 @@ Also gather when present:
 
 - Plan file: `plans/active/issue-###-*`
 - Plan JSON: `plans/active/issue-###.plan.json`
-- Pipeline artifacts: `.pipeline/classification.json`, `.pipeline/diagnosis.json`, `.pipeline/acceptance-trace.json`, `.pipeline/test-evidence.json`, `.pipeline/review-results.json`, `.pipeline/ship-manifest.json`
+- Pipeline artifacts: `.pipeline/candidate.json`, `.pipeline/baseline.json`, `.pipeline/classification.json`, `.pipeline/diagnosis.json`, `.pipeline/acceptance-trace.json`, `.pipeline/test-evidence.json`, `.pipeline/review-results.json`, `.pipeline/ship-manifest.json`
 - Operator artifacts: `.pipeline/events.jsonl`, `.pipeline/latest-checkpoint.json`, `.pipeline/checkpoints/`, `.pipeline/report.html`
-- Long-running control artifacts: `.pipeline/goal-contract.json`, `.pipeline/evaluator-results.json`, `.pipeline/loop-state.json`, `.pipeline/session-mining-report.json`, `.pipeline/visual-evidence/`, `.pipeline/benchmarks.json`
+- Long-running control artifacts: `.pipeline/goal-contract.json`, `.pipeline/evaluator-results.json`, `.pipeline/loop-state.json`, `.pipeline/operation-receipts.json`, `.pipeline/remote-jobs.json`, `.pipeline/session-mining-report.json`, `.pipeline/visual-evidence/`, `.pipeline/benchmarks.json`
 - Export bundle: `.pipeline/export-*` when `npm run yalla:run -- export` was used for a portable audit snapshot
 - Git diff/stat from the PR or branch: `git log "$BASE_BRANCH"..session/issue-###-* --stat` if branch still exists
 - Learnings: `docs/learnings/` entries referencing `issue-###`
@@ -55,7 +55,7 @@ Areas:
 4. Vertical slice quality: work was split into user-testable behavior slices, not horizontal layers.
 5. Test seam quality: acceptance criteria were verified through highest correct seams, with justified seam blockers only.
 6. Review actionability: Fail findings had file, code, issue, and fix; pass findings checked the right artifacts.
-7. Artifact and PR evidence quality: artifacts existed where useful, matched the PR story, and routine artifacts were not committed just for ceremony.
+7. Artifact and PR evidence quality: artifacts existed where useful, were current for one exact candidate, matched the PR story, and routine artifacts were not committed just for ceremony.
 8. Scope and shipping discipline: diff matched plan, docs drift was handled, base/CI blockers were handled honestly, and merge policy was respected.
 
 ## Diagnostic Checks
@@ -96,6 +96,11 @@ Record a finding only when a problem exists.
 
 ### Pipeline Hygiene
 
+- Was candidate identity exact at every accepted checkpoint/review, and were stale or superseded artifacts excluded from proof?
+- Were baseline, candidate, infrastructure, identity, policy, and superseded failures routed differently rather than fed into one repair loop?
+- Did concurrent work declare non-overlapping path ownership and use a single-writer state lock?
+- Did non-protected local mutations reserve unique operation IDs before execution and record terminal states? Did every protected action remain outside the local runner and go through an external operator-controlled executor that independently verified candidate, action, target, policy, and human approval?
+- For T1/T2 releases, did the adapter pin immutable project identity and record remote build/reuse/cost/retry budgets per candidate?
 - Was state resumable through `.pipeline-state.json`, issue comments, and PR evidence?
 - Was state resumable through `.pipeline/events.jsonl`, `.pipeline/latest-checkpoint.json`, issue comments, and PR evidence?
 - Were routine `.pipeline/*` artifacts kept local unless review-relevant?

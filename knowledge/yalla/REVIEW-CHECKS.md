@@ -50,6 +50,22 @@ Universal checks stay small and run on most diffs. Risk-triggered checks run onl
 - Tests only assert rendering/compilation while the behavior is user/API/tool visible
 - Claim verification verdict is `NOT VERIFIED` or `INCONCLUSIVE` but presented as success
 
+## candidate-integrity-check
+
+> "Do the review target, proof artifacts, and active worktree all identify the same immutable candidate?"
+
+**Pass:** Candidate schema is compatible; repository, worktree, branch, base
+SHA, head SHA, contract/config/policy digests, checkpoints, evaluator results,
+and outcome evidence agree. Declared parallel path claims do not overlap.
+
+**Fail criteria:**
+- `resume` is not `RESUMABLE_EXACT`
+- A checkpoint, evaluator result, or outcome artifact is unbound or stale
+- Review or test evidence names another head SHA, base SHA, worktree, or contract digest
+- A trust-root change was not followed by a fresh policy digest and reviewer context
+- Parallel path claims overlap or a worker edited outside its declared claim
+- A dirty worktree is deleted, reset, or cleaned without separate explicit authorization
+
 ## external-grounding-check
 
 > "When external behavior matters, are the implementation and its claims grounded in current authoritative evidence?"

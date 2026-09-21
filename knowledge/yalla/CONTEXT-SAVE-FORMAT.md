@@ -2,6 +2,11 @@
 
 Context saving keeps `/yalla` resumable after compaction, handoff, or a cold worktree restart. The primary durable state is `.pipeline-state.json` plus `.pipeline/*` artifacts, anchored to a unit of work identified as `issue-###`.
 
+Saved context is not resumable merely because files exist. Run
+`npm run yalla:run -- resume` and continue automatically only when the active
+candidate and latest checkpoint are `RESUMABLE_EXACT`. Other states require
+revalidation, a new candidate, or a stop; never reset Git automatically.
+
 ## When To Update
 
 - After each phase completes.

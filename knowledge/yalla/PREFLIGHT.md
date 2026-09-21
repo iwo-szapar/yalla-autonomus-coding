@@ -84,7 +84,14 @@ Read `base_branch` from `.claude/YALLA.md` (default `main`). Store as `$BASE_BRA
 
 ```bash
 git fetch origin "$BASE_BRANCH"
+git config --get remote.origin.url
+git rev-parse --verify "origin/$BASE_BRANCH"
 ```
+
+Normalize the observed origin and compare it with the declared repository when
+one is configured. A mismatch stops the run. The base must resolve locally or
+as `origin/$BASE_BRANCH`; never fall back to `HEAD`, because that silently
+changes the proof scope.
 
 ## Success State
 

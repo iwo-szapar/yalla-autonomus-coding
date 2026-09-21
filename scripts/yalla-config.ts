@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
+import { DEFAULT_CAPABILITIES, isCapability, type Capability } from './yalla-control.js'
 
 export type YallaConfig = {
   repo?: string
@@ -7,6 +8,7 @@ export type YallaConfig = {
   baseBranch?: string
   trackingMode?: string
   testDir?: string
+  releaseAdapterPath?: string
   commands: Record<string, string>
   models: Record<string, string>
   verifiers: Record<string, string>
@@ -46,6 +48,9 @@ export type YallaConfig = {
     minimumDiffDefaultFilesBudget?: number
     minimumDiffDefaultLocBudget?: number
   }
+  capabilities: {
+    allowed: Capability[]
+  }
   riskGates: Array<{
     name: string
     triggersOn: string[]
@@ -81,6 +86,7 @@ const DEFAULT_CONFIG: YallaConfig = {
   },
   evals: {},
   ceremony: {},
+  capabilities: { allowed: [...DEFAULT_CAPABILITIES] },
   riskGates: [],
 }
 
@@ -117,6 +123,7 @@ function cloneDefaultConfig(): YallaConfig {
     autopilot: { eligibleLabels: [], blockLabels: [] },
     evals: {},
     ceremony: {},
+    capabilities: { allowed: [...DEFAULT_CAPABILITIES] },
     riskGates: [],
   }
 }
@@ -188,6 +195,7 @@ function applyTopLevel(config: YallaConfig, key: string, rawValue: string, secti
   else if (key === 'base_branch') config.baseBranch = String(value ?? '')
   else if (key === 'tracking_mode') config.trackingMode = String(value ?? '')
   else if (key === 'test_dir') config.testDir = String(value ?? '')
+  else if (key === 'release_adapter') config.releaseAdapterPath = String(value ?? '')
   else if (section.includes('commands')) config.commands[key] = String(value ?? '')
 }
 
@@ -200,6 +208,7 @@ function applyNested(config: YallaConfig, parent: string, key: string, rawValue:
   else if (parent === 'autopilot') applyAutopilot(config, key, value)
   else if (parent === 'evals') applyEvals(config, key, value)
   else if (parent === 'ceremony') applyCeremony(config, key, value)
+  else if (parent === 'capabilities') applyCapabilities(config, key, value)
 }
 
 function applyTaskSystem(config: YallaConfig, key: string, value: unknown) {
@@ -240,6 +249,11 @@ function applyCeremony(config: YallaConfig, key: string, value: unknown) {
   else if (key === 'allow_user_override') config.ceremony.allowUserOverride = booleanValue(value)
   else if (key === 'minimum_diff_default_files_budget') config.ceremony.minimumDiffDefaultFilesBudget = numberValue(value)
   else if (key === 'minimum_diff_default_loc_budget') config.ceremony.minimumDiffDefaultLocBudget = numberValue(value)
+}
+
+function applyCapabilities(config: YallaConfig, key: string, value: unknown) {
+  if (key !== 'allowed') return
+  config.capabilities.allowed = arrayValue(value).filter(isCapability)
 }
 
 function applyRiskGate(riskGate: YallaConfig['riskGates'][number], key: string, value: unknown) {

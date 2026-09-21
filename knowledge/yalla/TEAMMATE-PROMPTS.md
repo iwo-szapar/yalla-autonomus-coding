@@ -110,6 +110,19 @@ Check security, payments, identity, async reliability, schema drift, generated a
 
 Use build subagents only when the run truly benefits from implementer/tester separation. The lead remains responsible for worktree safety and final edits.
 
+Every build assignment must include:
+
+```text
+Candidate ID/SHA: [candidate_id] / [head_sha]
+Base SHA: [base_sha]
+Branch/worktree: [branch] / [absolute worktree path]
+Path claim: [repo-relative files/directories owned by this teammate]
+```
+
+The teammate verifies these fields before editing or testing. A mismatch is
+`IDENTITY_MISMATCH`; a result that arrives after the active candidate changes
+is `SUPERSEDED`.
+
 ### implementer
 
 ```text
@@ -167,6 +180,10 @@ Mock only system boundaries. Do not mock internal modules just to make testing e
 ## Review Team Prompts
 
 Spawn reviewers after tests/validation evidence exists. The reviewer must not be the same context that wrote the implementation.
+
+Every review prompt includes the candidate ID/SHA and base SHA. A reviewer
+first checks them against `.pipeline/candidate.json`; a late review returns
+`SUPERSEDED` instead of Pass or Fail.
 
 Every reviewer must return `PASS — [check]` or `FAIL — [check]`. Every Fail needs file, exact code, issue, and fix. Findings are reported to the lead via SendMessage.
 

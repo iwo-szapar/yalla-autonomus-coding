@@ -37,6 +37,9 @@ Read `.claude/YALLA.md` first. It defines the repo, `base_branch`, the project `
 - Use the configured `issue_id_format` (default `issue-###`), never an internal task-table id.
 - Read commands and `base_branch` from `.claude/YALLA.md`. Never hardcode a test/build command or a branch name. `npm test` is only the generic default when the config is silent.
 - Default merge policy is PR-only.
+- Own candidate integrity: every teammate receives the current candidate ID/SHA, base SHA, branch, and worktree path; late results for an older candidate are `SUPERSEDED`.
+- Before parallel build dispatch, validate `.pipeline/path-ownership.json`. Do not dispatch overlapping path claims or delete/reset a dirty worktree.
+- Grant only the capabilities required by the approved phase. Protected production, provider, secret, migration, pricing, merge, and external-send capabilities remain absent without explicit authorization.
 - DB task tracking is optional. If `tracking_mode: db`, follow `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/SQL-TEMPLATES.md`. Never treat a SQL task table as required, and never let the run depend on one.
 
 ## Reference Files (read on demand)
@@ -65,6 +68,17 @@ Follow `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/PREFLIGHT.md`: read `tracking_mode
 
 Classify task type, scope mode (EXPANSION/HOLD/REDUCTION), phase split, risk tier, evidence mode, product-intent gate, architecture-doc gate, and merge policy. Product Intent applies when product/GTM/user-flow behavior, pricing/packaging, onboarding promises, access/delivery boundaries, metrics, or user-visible promises change. Create or resume the unit of work (GitHub issue, or a plan-file ID in file-only mode). Create a `session/issue-###-[slug]` branch/worktree from `$BASE_BRANCH`.
 
+After entering the worktree, initialize the candidate and bind resumable
+checkpoints to it. Refresh the candidate after integrated source, contract,
+configuration, or trust-policy changes.
+
+For T1/T2 remote work, treat local reservations and artifact reuse as telemetry,
+not execution authority or another full-suite/build execution. The local runner
+must not execute repository-supplied release preflight commands or authorize a
+protected action. An external operator-controlled executor independently proves
+the exact candidate and provider project/team/target, verifies approval and
+policy, and owns every consequential action.
+
 For bugs, regressions, and performance issues, run `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/DIAGNOSIS.md` before planning a fix — reproduce the exact symptom in a fast pass/fail loop first.
 
 ### Plan
@@ -75,9 +89,16 @@ Use subagents only when they improve the plan. The full team is analyst + archit
 
 Build in vertical slices. Prefer tester-led failing behavior tests at the highest correct seam before production code. Record `TEST_SEAM_BLOCKED` honestly instead of writing shallow tests. Run the project's typecheck/build gates (YALLA.md `commands`); skip any command left blank.
 
+For parallel slices, assign repo-relative path claims and validate them before
+dispatch. Require every completion to report its candidate ID/SHA and worktree.
+Classify failures before deciding whether to repair, retry, stop, or discard.
+
 ### Review
 
 Use fresh-context review. Each reviewer answers ONE binary question with Pass or Fail. Universal review stays small; run risk-triggered checks only when their triggers apply (`.claude/YALLA.md` `risk_gates` + the plan's `Risk-Triggered Gates`, defined in `${CLAUDE_PLUGIN_ROOT}/knowledge/yalla/REVIEW-CHECKS.md`). Run `intended-vs-implemented-check` whenever the product-intent gate applies. Every Fail needs file, exact code, issue, and fix. Scale by priority — P1: ~3 reviewers, P2: ~2, P3: ~1 — always including a success-invariant check for changed workflows. On any Fail, fix then re-run every check that applies to the changed files (a fix for one invariant can break another).
+
+Accept reviewer evidence only when its candidate binding is current. A trust-root
+diff requires a fresh policy digest and fresh reviewer context.
 
 ### Compound And Ship
 
@@ -98,7 +119,8 @@ Capture durable learnings only when they will prevent repeat mistakes (`docs/lea
 2. Read `plans/active/issue-###-[slug].md` → approved plan.
 3. Read the GitHub issue body/comments (or the plan file in file-only mode).
 4. Read `.pipeline/progress.md` and evidence artifacts when present.
-5. Resume from the recorded phase.
+5. Run `yalla:run -- resume`; continue only on `RESUMABLE_EXACT`.
+6. Revalidate, mint a new candidate, or stop for every other resume state.
 
 ## Rules
 

@@ -56,13 +56,22 @@ The executor writes code and implementation notes. The evaluator reads only:
 - visual/benchmark artifacts
 - `.pipeline/evaluator-results.json` history when rerunning
 
-The evaluator returns only `PASS`, `FAIL`, or `INCONCLUSIVE` plus findings and next instruction. A `FAIL` loops back to implementation. `INCONCLUSIVE` asks for stronger evidence or human input.
+The evaluator returns `PASS`, `FAIL`, or `INCONCLUSIVE` plus findings and next
+instruction, bound to the active candidate. `FAIL` also declares a failure
+class. Only `CANDIDATE_FAILURE` loops back to implementation; baseline,
+infrastructure, identity, policy, and superseded results follow their distinct
+stop/retry/discard actions. `INCONCLUSIVE` asks for stronger evidence or human
+input.
 
 ## Artifacts
 
 - Goal contract: `.pipeline/goal-contract.json`
+- Candidate identity: `.pipeline/candidate.json`
+- Inherited baseline: `.pipeline/baseline.json`
 - Evaluator results: `.pipeline/evaluator-results.json`
 - Loop state: `.pipeline/loop-state.json`
 - Session mining: `.pipeline/session-mining-report.json`
 - Visual evidence: `.pipeline/visual-evidence/*.{png,jpg,jpeg,webp,gif,svg}`
 - Benchmarks: `.pipeline/benchmarks.json`
+- Operation telemetry and idempotency: `.pipeline/operation-receipts.json`; require `local-configured-capability` for locally authorized routine actions and `none-local-telemetry-only` for protected-action mirrors, which are never execution authority
+- Remote build/job cost evidence: `.pipeline/remote-jobs.json`

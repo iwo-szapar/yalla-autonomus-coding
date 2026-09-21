@@ -16,6 +16,9 @@ Rules:
 
 - GitHub Issues are canonical for engineering work; reference work as `issue-###`.
 - Every non-tiny run records a goal contract, acceptance criteria, and evidence before shipping.
+- Final proof, review, resume, and remote-job evidence bind to one immutable candidate identity: observed origin, declared repository, worktree, branch, resolvable base SHA, head SHA, contract/config/policy digests, and run ID. Candidate drift stops reuse of earlier evidence; Yalla never substitutes `HEAD` for a missing base.
+- Classify failures before retrying: candidate, inherited baseline, infrastructure, identity, policy, or superseded. Only candidate failures enter the repair loop.
+- Capabilities are fail-closed. Branch commits/pushes/PR creation require configured grants. The local Yalla runner never authorizes protected operations or executes repository-supplied release preflights. Merge, production deployment/promotion, provider configuration, secrets, migrations, pricing, and external sends remain with an external operator-controlled executor that independently verifies identity, policy, and approval.
 - Only `PROVEN` may be described as done, complete, ready to merge, or safe for autopilot.
 - `NOT_PROVEN` and `INCONCLUSIVE` are honest outcomes, not success states.
 - Prefer deterministic proof over model judgment whenever a deterministic seam exists.

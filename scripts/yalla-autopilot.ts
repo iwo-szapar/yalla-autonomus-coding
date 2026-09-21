@@ -5,6 +5,15 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { loadYallaConfig } from './yalla-config.js'
+import {
+  CONTROL_SCHEMA_VERSION,
+  YALLA_CONTROL_VERSION,
+  acquireRunLock,
+  atomicWriteJson,
+  releaseRunLock,
+  requiredCapabilityForCommand,
+  type Capability,
+} from './yalla-control.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -22,17 +31,6 @@ const execFileAsync = promisify(execFile)
 // YALLA_REPO, or rely on `gh repo view` auto-detection. It is intentionally
 // not a real repository so a misconfigured run targets nothing.
 const DEFAULT_REPO = 'OWNER/REPO'
-
-const MUTATING_COMMANDS = [
-  'gh issue edit',
-  'gh issue create',
-  'gh issue comment',
-  'gh pr create',
-  'gh pr merge',
-  'gh pr edit',
-  'git commit',
-  'git push',
-]
 
 type Mode = 'dry-run'
 type Status = 'blocked' | 'dry-run-complete' | 'report-complete'
@@ -80,6 +78,8 @@ type CommandRecord = CommandResult & {
 }
 
 type AutopilotState = {
+  schema_version: number
+  yalla_version: string
   issue_id: string
   mode: Mode
   phase: 'preflight' | 'issue-probe' | 'stopped'
@@ -89,10 +89,15 @@ type AutopilotState = {
   completed_at: string
   stop_reason: string
   dry_run_side_effects_blocked: boolean
+  lock_owner: string
+  last_safe_checkpoint: string | null
+  allowed_capabilities: Capability[]
   issue_url?: string
 }
 
 type LoopTelemetry = {
+  schema_version: number
+  yalla_version: string
   issue_id: string
   mode: Mode
   iterations_budget: number
@@ -237,9 +242,13 @@ function redactSecrets(value: string) {
 }
 
 export function isMutatingCommand(command: string, args: string[]) {
-  const fullCommand = [command, ...args].join(' ')
-  return MUTATING_COMMANDS.find(prefix => fullCommand.startsWith(prefix))
+  const capability = requiredCapabilityForCommand(command, args)
+  if (!capability) return undefined
+  if (command === 'gh') return [command, ...args.slice(0, 2)].join(' ')
+  return [command, args[0]].filter(Boolean).join(' ')
 }
+
+export { requiredCapabilityForCommand }
 
 function assertDryRunSafe(command: string, args: string[]) {
   const mutatingCommand = isMutatingCommand(command, args)
@@ -252,7 +261,7 @@ function writeJson(rootDir: string, name: string, value: unknown) {
   const pipelineDir = resolve(rootDir, '.pipeline')
   mkdirSync(pipelineDir, { recursive: true })
   const path = resolve(pipelineDir, name)
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`)
+  atomicWriteJson(path, value)
   return path
 }
 
@@ -332,7 +341,7 @@ export async function runYallaAutopilotQueue(options: AutopilotQueueOptions): Pr
     return result
   }
 
-  function finish(status: Status, githubAuth: AutopilotState['github_auth'], stopReason: string, iterationsUsed: number) {
+  function finish(status: Status, githubAuth: AutopilotState['github_auth'], stopReason: string, iterationsUsed: number, report?: unknown) {
     return finishRun({
       issue: 'queue',
       mode,
@@ -346,6 +355,7 @@ export async function runYallaAutopilotQueue(options: AutopilotQueueOptions): Pr
       commandResults,
       sideEffectsAttempted,
       iterationsUsed,
+      report,
     })
   }
 
@@ -367,9 +377,7 @@ export async function runYallaAutopilotQueue(options: AutopilotQueueOptions): Pr
     generatedAt: now(),
     issues: parseIssueList(issueList.stdout),
   })
-  const reportPath = writeJson(rootDir, 'autopilot-queue-report.json', report)
-  const result = finish('report-complete', 'pass', report.selected_issue ? 'report-only-selected-candidate' : 'report-only-no-candidates', 1)
-  return { ...result, reportPath }
+  return finish('report-complete', 'pass', report.selected_issue ? 'report-only-selected-candidate' : 'report-only-no-candidates', 1, report)
 }
 
 function cleanLabels(labels: string[]) {
@@ -466,8 +474,11 @@ function finishRun(input: {
   sideEffectsAttempted: string[]
   iterationsUsed: number
   issueUrl?: string
+  report?: unknown
 }): AutopilotRunResult {
   const state: AutopilotState = {
+    schema_version: CONTROL_SCHEMA_VERSION,
+    yalla_version: YALLA_CONTROL_VERSION,
     issue_id: input.issue,
     mode: input.mode,
     phase: input.phase,
@@ -477,9 +488,14 @@ function finishRun(input: {
     completed_at: input.completedAt,
     stop_reason: input.stopReason,
     dry_run_side_effects_blocked: input.mode === 'dry-run',
+    lock_owner: `autopilot:${input.issue}`,
+    last_safe_checkpoint: null,
+    allowed_capabilities: ['read_repo'],
     issue_url: input.issueUrl,
   }
   const telemetry: LoopTelemetry = {
+    schema_version: CONTROL_SCHEMA_VERSION,
+    yalla_version: YALLA_CONTROL_VERSION,
     issue_id: input.issue,
     mode: input.mode,
     iterations_budget: 1,
@@ -490,9 +506,17 @@ function finishRun(input: {
     side_effects_attempted: input.sideEffectsAttempted,
   }
 
-  const statePath = writeJson(input.rootDir, 'autopilot-state.json', state)
-  const telemetryPath = writeJson(input.rootDir, 'loop-telemetry.json', telemetry)
-  return { status: input.status, exitCode: input.status === 'blocked' ? 1 : 0, statePath, telemetryPath }
+  const lock = acquireRunLock(input.rootDir, `autopilot:${input.issue}`)
+  try {
+    const reportPath = input.report === undefined ? undefined : writeJson(input.rootDir, 'autopilot-queue-report.json', input.report)
+    const statePath = writeJson(input.rootDir, 'autopilot-state.json', state)
+    const telemetryPath = writeJson(input.rootDir, 'loop-telemetry.json', telemetry)
+    const logPath = resolve(input.rootDir, '.pipeline/run-log.jsonl')
+    writeFileSync(logPath, `${JSON.stringify(state)}\n`, { flag: 'a', mode: 0o600 })
+    return { status: input.status, exitCode: input.status === 'blocked' ? 1 : 0, statePath, telemetryPath, reportPath }
+  } finally {
+    releaseRunLock(lock)
+  }
 }
 
 async function main() {
